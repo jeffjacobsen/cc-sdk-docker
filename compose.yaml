@@ -1,0 +1,38 @@
+services:
+  # FastAPI server container
+  server:
+    container_name: claude-sdk-server
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Tag the built image locally (includes both TypeScript and Python)
+    image: ${IMAGE_NAME:-claude-code-sdk:latest}
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    environment:
+      # Claude Code OAuth Token (set this in .env or export before running)
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      # Anthropic API Key (for direct API access)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # Legacy session token (fallback)
+      - CLAUDE_CODE_SESSION=${CLAUDE_CODE_SESSION:-}
+      # Port configuration
+      - PORT=${PORT:-3000}
+    volumes:
+      # Mount current directory for development
+      - .:/app
+      # Docker volume for persistent Claude CLI authentication
+      - claude-auth:/home/claude/.claude
+    working_dir: /app
+    # Run as root to install packages, then switch to claude user for the server
+    user: root
+    command: bash -c "pip install -r /app/server/requirements.txt && exec su claude -c 'python /app/server/api.py'"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-3000}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  claude-auth:
