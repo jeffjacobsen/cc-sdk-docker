@@ -84,12 +84,15 @@ Bot: [Uses Bash tool]
 
 ### Claude Code Slash Commands
 
-To use Claude Code's built-in slash commands (like `/help` or `/clear`), use double slashes:
+To use Claude Code's built-in slash commands (like `/help` or `/clear`), escape the slash with a backslash:
 
 ```
-//help     → Claude receives /help
-//clear    → Claude receives /clear
+\/help     → Claude receives /help
+\/clear    → Claude receives /clear
+\/prime    → Claude receives /prime
 ```
+
+This works because Telegram interprets `\/` and passes `/` to the bot.
 
 ### Multi-turn Conversations
 

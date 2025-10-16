@@ -216,7 +216,12 @@ Bot: [Claude executes Bash tool and shows results] 🔧 BASH
 
 You: Read the first file
 Bot: [Claude reads and shows file contents] 🔧 READ
+
+You: \/help
+Bot: [Shows Claude Code help - the backslash escapes the slash]
 ```
+
+**Note:** To use Claude Code's built-in commands (like `/help`, `/clear`, `/prime`), escape the slash with a backslash: `\/help`
 
 ## Using the Slack Bot
 
@@ -266,7 +271,12 @@ Bot: [Claude executes Bash tool and shows results] 🔧 BASH
 
 You: Read the first file
 Bot: [Claude reads and shows file contents] 🔧 READ
+
+You: \/help
+Bot: [Shows Claude Code help - the backslash escapes the slash]
 ```
+
+**Note:** To use Claude Code's built-in commands (like `/help`, `/clear`, `/prime`), escape the slash with a backslash: `\/help`
 
 ## Building Your Own Server
 

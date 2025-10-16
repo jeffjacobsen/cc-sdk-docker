@@ -192,6 +192,18 @@ Mention the bot in any channel:
 
 The bot will respond in a thread to keep channels clean.
 
+### Claude Code Slash Commands
+
+To use Claude Code's built-in slash commands (like `/help` or `/clear`), escape the slash with a backslash:
+
+```
+\/help     → Claude receives /help
+\/clear    → Claude receives /clear
+\/prime    → Claude receives /prime
+```
+
+This works because Slack interprets `\/` and passes `/` to the bot. Note that `//` does not work in Slack.
+
 ### Multi-turn Conversations
 
 The bot remembers context within each conversation:
