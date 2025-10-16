@@ -37,3 +37,6 @@ Thumbs.db
 *.tmp
 *.swp
 *~
+
+slack_sessions/*.json
+telegram_sessions/*.json

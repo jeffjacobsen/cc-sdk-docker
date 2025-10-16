@@ -7,6 +7,8 @@ A simple Docker container with Claude Code SDK (Python + TypeScript) and an exam
 This repository provides:
 - **Docker container** with Claude Code Python SDK and TypeScript SDK pre-installed
 - **Example FastAPI server** that exposes the Claude Code SDK via HTTP REST API
+- **Telegram bot** for interactive chat with Claude via Telegram
+- **Slack bot** for interactive chat with Claude via Slack
 - **Sample client code** showing how to interact with the server
 - **Starting point** for building your own Claude-powered servers and applications
 
@@ -79,8 +81,11 @@ Interactive API docs available at: http://localhost:3000/docs
 - **Python SDK** - [claude-code-sdk](https://pypi.org/project/claude-code-sdk/)
 - **Development tools** - git, curl, jq, nano
 
-### Example Server
+### Example Server & Bots
 - **FastAPI server** ([server/api.py](server/api.py)) - REST API for Claude interactions
+- **Telegram bot** ([server/telegram_bot.py](server/telegram_bot.py)) - Chat with Claude via Telegram
+- **Slack bot** ([server/slack_bot.py](server/slack_bot.py)) - Chat with Claude via Slack
+- **Shared bot logic** ([server/bot_common.py](server/bot_common.py)) - Common code for all bots
 - **One-off queries** - Send single prompts
 - **Conversation sessions** - Multi-turn conversations with context
 - **Streaming responses** - Real-time output via Server-Sent Events
@@ -95,19 +100,28 @@ Interactive API docs available at: http://localhost:3000/docs
 
 ```
 .
-├── Dockerfile              # Multi-stage build: Node.js + Python + Claude SDKs
-├── compose.yaml            # Docker Compose config for the server
-├── build.sh                # Build script
+├── Dockerfile                    # Multi-stage build: Node.js + Python + Claude SDKs
+├── compose.yaml                  # Docker Compose: server + telegram-bot
+├── build.sh                      # Build script
 ├── server/
-│   ├── api.py             # FastAPI server implementation
-│   ├── requirements.txt   # Python dependencies
-│   └── README.md          # Quick reference
-├── examples/client/       # Example client code
-│   ├── test_server.py     # Python test client
-│   └── test_server.sh     # Bash test client
-└── docs/                  # Documentation
-    ├── AUTHENTICATION.md  # Auth setup details
-    └── SERVER.md          # API documentation
+│   ├── api.py                   # FastAPI server implementation
+│   ├── telegram_bot.py          # Telegram bot implementation
+│   ├── slack_bot.py             # Slack bot implementation
+│   ├── bot_common.py            # Shared bot logic (sessions, Claude SDK)
+│   ├── requirements.txt         # Python dependencies (server + bots)
+│   ├── test_telegram_bot.py     # Telegram bot test script
+│   ├── test_slack_bot.py        # Slack bot test script
+│   ├── TELEGRAM_TESTING.md      # Telegram bot testing guide
+│   ├── SLACK_SETUP.md           # Slack bot setup guide
+│   └── README.md                # Quick reference
+├── examples/client/             # Example client code
+│   ├── test_server.py           # Python test client
+│   └── test_server.sh           # Bash test client
+└── docs/                        # Documentation
+    ├── AUTHENTICATION.md        # Auth setup details
+    ├── SERVER.md                # API documentation
+    ├── DEPLOYMENT.md            # Production deployment guide
+    └── TELEGRAM_DOCKER.md       # Telegram bot Docker guide
 ```
 
 ## Authentication
@@ -157,6 +171,104 @@ curl -X POST http://localhost:3000/query \
 ```
 
 See [docs/SERVER.md](docs/SERVER.md) for complete API documentation.
+
+## Using the Telegram Bot
+
+Run Claude Code as a Telegram bot:
+
+### Quick Start
+
+```bash
+# 1. Get a bot token from @BotFather on Telegram
+# 2. Add to .env file
+echo "TELEGRAM_BOT_API_KEY=your_token_here" >> .env
+
+# 3. Start the bot
+docker compose up -d telegram-bot
+
+# 4. Open Telegram and chat with your bot!
+```
+
+### Features
+
+- **Per-user conversations** - Each user has their own context
+- **Working directory per user** - Configure where files are accessed
+- **Persistent sessions** - Conversations saved across restarts
+- **All Claude Code tools** - Read, Write, Edit, Bash commands
+- **Commands** - `/start`, `/help`, `/setcwd`, `/getcwd`, `/reset`
+
+### Documentation
+
+- [server/TELEGRAM_TESTING.md](server/TELEGRAM_TESTING.md) - Complete testing guide
+- [docs/TELEGRAM_DOCKER.md](docs/TELEGRAM_DOCKER.md) - Docker deployment guide
+
+### Example Usage
+
+In Telegram:
+```
+You: /start
+Bot: 👋 Welcome to Claude Code Bot!
+
+You: /setcwd /workspace
+Bot: ✅ Working directory set to: /workspace
+
+You: List all Python files in the current directory
+Bot: [Claude executes Bash tool and shows results] 🔧 BASH
+
+You: Read the first file
+Bot: [Claude reads and shows file contents] 🔧 READ
+```
+
+## Using the Slack Bot
+
+Run Claude Code as a Slack bot:
+
+### Quick Start
+
+```bash
+# 1. Create Slack app at api.slack.com/apps
+# 2. Get Bot Token (xoxb-...) and App Token (xapp-...)
+# 3. Add to .env file
+echo "SLACK_BOT_TOKEN=xoxb-..." >> .env
+echo "SLACK_APP_TOKEN=xapp-..." >> .env
+
+# 4. Start the bot
+docker compose up -d slack-bot
+
+# 5. Open Slack and chat with your bot!
+```
+
+### Features
+
+- **Per-user conversations** - Each user has their own context
+- **Working directory per user** - Configure where files are accessed
+- **Channel and DM support** - Works in channels and direct messages
+- **Persistent sessions** - Conversations saved across restarts
+- **All Claude Code tools** - Read, Write, Edit, Bash commands
+- **Slash commands** - `/start`, `/help`, `/setcwd`, `/getcwd`, `/reset`
+- **Rich formatting** - Threaded replies and markdown support
+
+### Documentation
+
+- [server/SLACK_SETUP.md](server/SLACK_SETUP.md) - Complete setup guide (detailed)
+- [docs/SLACK_BOT_GUIDE.md](docs/SLACK_BOT_GUIDE.md) - Implementation comparison
+
+### Example Usage
+
+In Slack:
+```
+You: /start
+Bot: 👋 Welcome to Claude Code Bot!
+
+You: /setcwd /workspace
+Bot: ✅ Working directory set to: /workspace
+
+You: List all Python files in the current directory
+Bot: [Claude executes Bash tool and shows results] 🔧 BASH
+
+You: Read the first file
+Bot: [Claude reads and shows file contents] 🔧 READ
+```
 
 ## Building Your Own Server
 
@@ -276,3 +388,8 @@ MIT License - see [LICENSE](LICENSE) file for details
 ## Contributing
 
 This is a simple example project to help you get started. Feel free to fork and modify for your own needs!
+
+## Credits
+- Added Cole Medin's [Telegram Bot](https://github.com/coleam00/ottomator-agents/blob/main/claude-agent-sdk-demos/telegram_integration/telegram_bot.py) 
+- Thanks to [cabinlab/claude-code-sdk-docker](https://github.com/cabinlab/claude-code-sdk-docker) for implementing setup-token authentication flow.
+- [receipting/claude-agent-sdk-container](https://github.com/receipting/claude-agent-sdk-container) is a similar project where you might find some ideas.

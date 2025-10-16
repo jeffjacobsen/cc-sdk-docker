@@ -46,4 +46,4 @@ build/
 # Secrets directory (for Docker Secrets)
 .secrets/
 
-.claude/
+.claude/settings.local.json

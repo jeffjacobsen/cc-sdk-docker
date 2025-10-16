@@ -41,8 +41,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install Python SDK in the virtual environment
-RUN pip install --no-cache-dir claude-code-sdk
+# Install Python SDK and Telegram bot dependencies in the virtual environment
+RUN pip install --no-cache-dir \
+    claude-code-sdk \
+    python-telegram-bot \
+    python-dotenv
 
 # Stage 3: Runtime image with both TypeScript and Python
 FROM node:22-slim AS runtime

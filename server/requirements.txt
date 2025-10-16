@@ -1,5 +1,18 @@
-# FastAPI server dependencies for Claude Code SDK
+# Python dependencies for Claude Code SDK applications
+# FastAPI server + Telegram bot + Slack bot
+
+# FastAPI server dependencies
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
 pydantic>=2.5.0
 python-multipart>=0.0.6
+
+# Telegram bot dependencies
+python-telegram-bot>=21.0,<22.0
+python-dotenv>=1.0.0
+
+# Slack bot dependencies
+slack-bolt>=1.18.0
+
+# Claude Code SDK (used by all)
+claude-agent-sdk>=0.1.0
