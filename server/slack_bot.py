@@ -37,6 +37,8 @@ from bot_common import (
     set_user_cwd,
     get_user_cwd,
     clear_user_session,
+    set_show_thinking,
+    get_show_thinking,
     process_claude_message,
     split_long_message,
     format_tool_indicators,
@@ -109,6 +111,7 @@ async def help_command(ack, command, say):
 
 *Conversation Commands:*
 • `/reset` - Clear your conversation history (keeps cwd setting)
+• `/showthinking on/off` - Toggle thinking blocks visibility
 • `/start` - Show welcome message
 • `/help` - Show this help message
 
@@ -200,6 +203,50 @@ async def reset_command(ack, command, say):
         text="🔄 Conversation cleared!\n\n"
         "Your working directory setting has been preserved.\n"
         "We can start a fresh conversation now."
+    )
+
+
+@app.command("/showthinking")
+async def showthinking_command(ack, command, say):
+    """Handle /showthinking command - toggle thinking blocks visibility."""
+    await ack()
+
+    user_id = command['user_id']
+    toggle = command.get('text', '').strip().lower()
+
+    # Check if toggle argument provided
+    if not toggle:
+        # Show current status
+        current = get_show_thinking(user_id, "slack")
+        status = "ON" if current else "OFF"
+        await say(
+            text=f"💭 Thinking blocks are currently: *{status}*\n\n"
+            "*Usage:*\n"
+            "`/showthinking on` - Show thinking blocks\n"
+            "`/showthinking off` - Hide thinking blocks\n\n"
+            "Thinking blocks show Claude's reasoning process."
+        )
+        return
+
+    if toggle not in ["on", "off"]:
+        await say(
+            text="⚠️ Invalid argument. Use 'on' or 'off'.\n\n"
+            "*Examples:*\n"
+            "`/showthinking on`\n"
+            "`/showthinking off`"
+        )
+        return
+
+    # Set preference
+    show_thinking = (toggle == "on")
+    set_show_thinking(user_id, show_thinking, "slack")
+
+    status = "enabled" if show_thinking else "disabled"
+    emoji = "✅" if show_thinking else "❌"
+
+    await say(
+        text=f"{emoji} Thinking blocks {status}!\n\n"
+        f"{'I will now show my reasoning process in responses.' if show_thinking else 'I will now hide my thinking process.'}"
     )
 
 

@@ -18,7 +18,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from claude_code_sdk import query, ClaudeSDKClient, ClaudeCodeOptions
-from claude_code_sdk.types import AssistantMessage, TextBlock, ToolUseBlock, ResultMessage
+from claude_code_sdk.types import AssistantMessage, TextBlock, ToolUseBlock, ResultMessage, ThinkingBlock
+
+# Import unified SDK executor
+from sdk_executor import (
+    get_executor,
+    ExecutorConfig,
+    ResponseMode,
+    ThinkingMode
+)
 
 
 # Global session storage
@@ -83,6 +91,8 @@ class QueryRequest(BaseModel):
     permission_mode: Optional[str] = Field(None, description="Permission mode: default, acceptEdits, plan, bypassPermissions")
     max_turns: Optional[int] = Field(None, description="Maximum conversation turns")
     stream: bool = Field(False, description="Stream the response using Server-Sent Events")
+    include_thinking: bool = Field(False, description="Include thinking blocks in response")
+    cwd: Optional[str] = Field(None, description="Working directory for file operations")
 
 
 class SessionStartRequest(BaseModel):
@@ -132,35 +142,6 @@ def build_options(
     return ClaudeCodeOptions(**options_dict) if options_dict else ClaudeCodeOptions()
 
 
-async def stream_query_response(prompt: str, options: ClaudeCodeOptions):
-    """Stream responses using Server-Sent Events format"""
-    try:
-        async for message in query(prompt=prompt, options=options):
-            if isinstance(message, AssistantMessage):
-                for block in message.content:
-                    if isinstance(block, TextBlock):
-                        # SSE format: data: {json}\n\n
-                        yield f"data: {{'type': 'text', 'text': {repr(block.text)}}}\n\n"
-                    elif isinstance(block, ToolUseBlock):
-                        yield f"data: {{'type': 'tool_use', 'name': '{block.name}', 'id': '{block.id}'}}\n\n"
-
-            elif isinstance(message, ResultMessage):
-                result_data = {
-                    'type': 'result',
-                    'subtype': message.subtype,
-                    'duration_ms': message.duration_ms,
-                    'num_turns': message.num_turns,
-                    'total_cost_usd': message.total_cost_usd
-                }
-                yield f"data: {result_data}\n\n"
-
-        yield "data: {'type': 'done'}\n\n"
-
-    except Exception as e:
-        error_data = {'type': 'error', 'message': str(e)}
-        yield f"data: {error_data}\n\n"
-
-
 # API Endpoints
 @app.get("/")
 async def root():
@@ -199,40 +180,73 @@ async def create_query(request: QueryRequest):
     """
     One-off query to Claude (no conversation context)
     Each call starts fresh with no memory of previous interactions
+
+    Uses the unified SDK executor with observability support.
     """
-    options = build_options(
-        model=request.model,
+    # Build executor configuration
+    thinking_mode = ThinkingMode.INCLUDE if request.include_thinking else ThinkingMode.EXCLUDE
+
+    config = ExecutorConfig(
+        user_id="api_user",
+        platform="api",
+        cwd=request.cwd or os.getcwd(),
         allowed_tools=request.allowed_tools,
-        permission_mode=request.permission_mode,
-        max_turns=request.max_turns
+        response_mode=ResponseMode.STREAM if request.stream else ResponseMode.BUFFER_ALL,
+        thinking_mode=thinking_mode,
+        include_tool_indicators=False,  # API doesn't need tool indicators
+        metadata={
+            "model": request.model,
+            "permission_mode": request.permission_mode,
+            "max_turns": request.max_turns,
+        }
     )
 
     # Stream response if requested
     if request.stream:
-        return StreamingResponse(
-            stream_query_response(request.prompt, options),
-            media_type="text/event-stream"
-        )
+        async def stream_response():
+            """Stream responses using Server-Sent Events format"""
+            try:
+                executor = get_executor()
+                async for message, final_result in executor.execute_stream(request.prompt, config):
+                    if message:
+                        if isinstance(message, AssistantMessage):
+                            for block in message.content:
+                                if isinstance(block, TextBlock):
+                                    yield f"data: {{'type': 'text', 'text': {repr(block.text)}}}\n\n"
+                                elif isinstance(block, ToolUseBlock):
+                                    yield f"data: {{'type': 'tool_use', 'name': '{block.name}', 'id': '{block.id}'}}\n\n"
+                                elif isinstance(block, ThinkingBlock) and request.include_thinking:
+                                    yield f"data: {{'type': 'thinking', 'text': {repr(block.thinking)}}}\n\n"
+                        elif isinstance(message, ResultMessage):
+                            result_data = {
+                                'type': 'result',
+                                'subtype': message.subtype,
+                                'duration_ms': message.duration_ms,
+                                'num_turns': message.num_turns,
+                                'total_cost_usd': message.total_cost_usd
+                            }
+                            yield f"data: {result_data}\n\n"
+                    elif final_result:
+                        # Stream final metrics
+                        yield f"data: {{'type': 'metrics', 'duration_ms': {final_result.metrics.get('duration_ms', 0)}}}\n\n"
 
-    # Otherwise, collect full response
+                yield "data: {'type': 'done'}\n\n"
+            except Exception as e:
+                error_data = {'type': 'error', 'message': str(e)}
+                yield f"data: {error_data}\n\n"
+
+        return StreamingResponse(stream_response(), media_type="text/event-stream")
+
+    # Otherwise, collect full response using executor
     try:
-        response_text = ""
-        result_info = None
-
-        async for message in query(prompt=request.prompt, options=options):
-            if isinstance(message, AssistantMessage):
-                for block in message.content:
-                    if isinstance(block, TextBlock):
-                        response_text += block.text
-
-            elif isinstance(message, ResultMessage):
-                result_info = message
+        executor = get_executor()
+        result = await executor.execute(request.prompt, config)
 
         return QueryResponse(
-            response=response_text,
-            duration_ms=result_info.duration_ms if result_info else None,
-            num_turns=result_info.num_turns if result_info else None,
-            total_cost_usd=result_info.total_cost_usd if result_info else None
+            response=result.text,
+            duration_ms=result.metrics.get("duration_ms"),
+            num_turns=None,  # Not available without ResultMessage
+            total_cost_usd=None  # Not available without ResultMessage
         )
 
     except Exception as e:

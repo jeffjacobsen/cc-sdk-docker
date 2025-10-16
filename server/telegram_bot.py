@@ -250,6 +250,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 **Conversation Commands:**
 /reset - Clear your conversation history (keeps cwd setting)
+/showthinking on/off - Toggle thinking blocks visibility
 /start - Show welcome message
 /help - Show this help message
 
@@ -332,6 +333,52 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔄 Conversation cleared!\n\n"
         "Your working directory setting has been preserved.\n"
         "We can start a fresh conversation now."
+    )
+
+
+async def showthinking_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /showthinking command - toggle thinking blocks visibility."""
+    user_id = update.effective_user.id
+
+    # Check if toggle argument provided
+    if not context.args or len(context.args) == 0:
+        # Show current status
+        from bot_common import get_show_thinking
+        current = get_show_thinking(str(user_id), "telegram")
+        status = "ON" if current else "OFF"
+        await update.message.reply_text(
+            f"💭 Thinking blocks are currently: *{status}*\n\n"
+            "Usage:\n"
+            "/showthinking on - Show thinking blocks\n"
+            "/showthinking off - Hide thinking blocks\n\n"
+            "Thinking blocks show Claude's reasoning process.",
+            parse_mode='Markdown'
+        )
+        return
+
+    # Get the toggle value
+    toggle = context.args[0].lower()
+
+    if toggle not in ["on", "off"]:
+        await update.message.reply_text(
+            "⚠️ Invalid argument. Use 'on' or 'off'.\n\n"
+            "Examples:\n"
+            "/showthinking on\n"
+            "/showthinking off"
+        )
+        return
+
+    # Import and use bot_common functions
+    from bot_common import set_show_thinking
+    show_thinking = (toggle == "on")
+    set_show_thinking(str(user_id), show_thinking, "telegram")
+
+    status = "enabled" if show_thinking else "disabled"
+    emoji = "✅" if show_thinking else "❌"
+
+    await update.message.reply_text(
+        f"{emoji} Thinking blocks {status}!\n\n"
+        f"{'I will now show my reasoning process in responses.' if show_thinking else 'I will now hide my thinking process.'}"
     )
 
 
@@ -618,6 +665,7 @@ def main():
     application.add_handler(CommandHandler("getcwd", getcwd_command))
     application.add_handler(CommandHandler("searchcwd", searchcwd_command))
     application.add_handler(CommandHandler("reset", reset_command))
+    application.add_handler(CommandHandler("showthinking", showthinking_command))
 
     # Add message handler for regular text messages
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

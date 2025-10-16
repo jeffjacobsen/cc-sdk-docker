@@ -16,3 +16,7 @@ slack-bolt>=1.18.0
 
 # Claude Code SDK (used by all)
 claude-agent-sdk>=0.1.0
+
+# Observability (optional, enabled via environment variables)
+sentry-sdk>=1.40.0
+posthog>=3.0.0
