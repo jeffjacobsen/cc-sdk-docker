@@ -263,6 +263,9 @@ Just send me a regular message to chat! I'll remember the context of our convers
 • "Create a new file called test.py with a hello world function"
 • "What's the difference between these two files?"
 
+**Pro Tip:**
+To send Claude Code slash commands (like /help or /clear), use double slashes: `//help` or `//clear`
+
 Your conversations are private and stored locally per user."""
 
     await update.message.reply_text(help_message, parse_mode='Markdown')
@@ -508,6 +511,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     user_message = update.message.text
+
+    # Handle // escape for slash commands
+    # If message starts with //, strip the first / so Claude can interpret it
+    if user_message.startswith("//"):
+        user_message = user_message[1:]
+        logger.info(f"Stripped leading / from escaped command: {user_message[:50]}...")
 
     logger.info(f"Received message from user {user_id} ({user.username}): {user_message[:50]}...")
 
