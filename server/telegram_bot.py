@@ -32,14 +32,19 @@ from telegram.ext import (
     ContextTypes
 )
 
-from claude_agent_sdk import (
-    ClaudeSDKClient,
-    ClaudeAgentOptions,
-    AssistantMessage,
-    TextBlock,
-    ToolUseBlock,
-    ToolResultBlock,
-    ResultMessage
+# Import shared bot functionality
+from bot_common import (
+    save_user_session,
+    load_user_session,
+    set_user_cwd,
+    get_user_cwd,
+    clear_user_session,
+    set_show_thinking,
+    get_show_thinking,
+    process_claude_message,
+    split_long_message,
+    format_tool_indicators,
+    search_directories
 )
 
 # Load environment variables
@@ -53,158 +58,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-SESSIONS_DIR = Path("telegram_sessions")
-SESSIONS_DIR.mkdir(exist_ok=True)
-
 # Telegram message length limit
 MAX_TELEGRAM_MESSAGE_LENGTH = 4096
-
-
-# ==================== Session Management ====================
-
-def save_user_session(user_id: int, session_id: str, cwd: Optional[str] = None):
-    """
-    Save session data for a Telegram user.
-
-    Args:
-        user_id: Telegram user ID
-        session_id: Claude SDK session ID
-        cwd: Working directory path (optional)
-    """
-    session_file = SESSIONS_DIR / f"{user_id}.json"
-
-    # Load existing data to preserve fields
-    existing_data = {}
-    if session_file.exists():
-        with open(session_file, "r") as f:
-            existing_data = json.load(f)
-
-    # Update session data
-    session_data = {
-        "session_id": session_id,
-        "cwd": cwd or existing_data.get("cwd"),
-        "last_updated": datetime.utcnow().isoformat() + "Z"
-    }
-
-    # Preserve created_at timestamp
-    if "created_at" in existing_data:
-        session_data["created_at"] = existing_data["created_at"]
-    else:
-        session_data["created_at"] = session_data["last_updated"]
-
-    with open(session_file, "w") as f:
-        json.dump(session_data, f, indent=2)
-
-    logger.info(f"Saved session for user {user_id}")
-
-
-def load_user_session(user_id: int) -> Optional[Tuple[str, str]]:
-    """
-    Load session data for a Telegram user.
-
-    Args:
-        user_id: Telegram user ID
-
-    Returns:
-        Tuple of (session_id, cwd) if session exists, None otherwise
-    """
-    session_file = SESSIONS_DIR / f"{user_id}.json"
-
-    if not session_file.exists():
-        return None
-
-    try:
-        with open(session_file, "r") as f:
-            data = json.load(f)
-            session_id = data.get("session_id")
-            cwd = data.get("cwd")
-            return (session_id, cwd) if session_id else None
-    except (json.JSONDecodeError, KeyError) as e:
-        logger.error(f"Error loading session for user {user_id}: {e}")
-        return None
-
-
-def set_user_cwd(user_id: int, cwd: str):
-    """
-    Set the working directory for a user.
-
-    Args:
-        user_id: Telegram user ID
-        cwd: Working directory path
-    """
-    session_file = SESSIONS_DIR / f"{user_id}.json"
-
-    # Load existing data or create new
-    session_data = {}
-    if session_file.exists():
-        with open(session_file, "r") as f:
-            session_data = json.load(f)
-
-    # Update cwd
-    session_data["cwd"] = cwd
-    session_data["last_updated"] = datetime.utcnow().isoformat() + "Z"
-
-    if "created_at" not in session_data:
-        session_data["created_at"] = session_data["last_updated"]
-
-    with open(session_file, "w") as f:
-        json.dump(session_data, f, indent=2)
-
-    logger.info(f"Set cwd for user {user_id}: {cwd}")
-
-
-def get_user_cwd(user_id: int) -> str:
-    """
-    Get the working directory for a user.
-
-    Args:
-        user_id: Telegram user ID
-
-    Returns:
-        Working directory path (falls back to WORKING_DIRECTORY env or cwd)
-    """
-    session_file = SESSIONS_DIR / f"{user_id}.json"
-
-    if session_file.exists():
-        try:
-            with open(session_file, "r") as f:
-                data = json.load(f)
-                if data.get("cwd"):
-                    return data["cwd"]
-        except (json.JSONDecodeError, KeyError):
-            pass
-
-    # Fallback to environment variable or current directory
-    return os.getenv("WORKING_DIRECTORY", os.getcwd())
-
-
-def clear_user_session(user_id: int):
-    """
-    Clear the session for a user (keeps cwd configuration).
-
-    Args:
-        user_id: Telegram user ID
-    """
-    session_file = SESSIONS_DIR / f"{user_id}.json"
-
-    if session_file.exists():
-        try:
-            with open(session_file, "r") as f:
-                data = json.load(f)
-
-            # Keep only cwd, remove session_id
-            new_data = {
-                "cwd": data.get("cwd"),
-                "created_at": data.get("created_at"),
-                "last_updated": datetime.utcnow().isoformat() + "Z"
-            }
-
-            with open(session_file, "w") as f:
-                json.dump(new_data, f, indent=2)
-
-            logger.info(f"Cleared session for user {user_id}")
-        except Exception as e:
-            logger.error(f"Error clearing session for user {user_id}: {e}")
 
 
 # ==================== Command Handlers ====================
@@ -307,7 +162,7 @@ async def setcwd_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     abs_path = os.path.abspath(path)
 
     # Save the working directory
-    set_user_cwd(user_id, abs_path)
+    set_user_cwd(str(user_id), abs_path, "telegram")
 
     await update.message.reply_text(
         f"✅ Working directory set to:\n{abs_path}\n\n"
@@ -318,7 +173,7 @@ async def setcwd_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def getcwd_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /getcwd command - show current working directory."""
     user_id = update.effective_user.id
-    cwd = get_user_cwd(user_id)
+    cwd = get_user_cwd(str(user_id), "telegram")
 
     await update.message.reply_text(
         f"📁 Your current working directory:\n{cwd}\n\n"
@@ -330,7 +185,7 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /reset command - clear conversation session."""
     user_id = update.effective_user.id
 
-    clear_user_session(user_id)
+    clear_user_session(str(user_id), "telegram")
 
     await update.message.reply_text(
         "🔄 Conversation cleared!\n\n"
@@ -401,7 +256,7 @@ async def searchcwd_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    query = " ".join(context.args).lower()
+    query = " ".join(context.args)
 
     await update.message.reply_text(
         f"🔍 Searching for directories matching '{query}'...\n"
@@ -409,59 +264,8 @@ async def searchcwd_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     try:
-        # Search common locations
-        search_paths = []
-
-        # Add user home directory
-        home = Path.home()
-        search_paths.append(home)
-
-        # Add common Windows locations if on Windows
-        if os.name == 'nt':
-            search_paths.extend([
-                Path("C:\\Users"),
-                Path("C:\\Projects"),
-                Path("D:\\") if Path("D:\\").exists() else None,
-            ])
-        else:
-            # Add common Unix/Linux locations
-            search_paths.extend([
-                Path("/home"),
-                Path("/opt"),
-                Path("/var"),
-            ])
-
-        # Remove None values
-        search_paths = [p for p in search_paths if p and p.exists()]
-
-        # Search for matching directories
-        matches = []
-        max_depth = 3  # Limit search depth for performance
-        max_results = 15  # Limit number of results
-
-        for base_path in search_paths:
-            if len(matches) >= max_results:
-                break
-
-            try:
-                # Search with depth limit
-                for depth in range(max_depth):
-                    if len(matches) >= max_results:
-                        break
-
-                    # Build glob pattern for current depth
-                    pattern = "/".join(["*"] * depth) + "/*" if depth > 0 else "*"
-
-                    for item in base_path.glob(pattern):
-                        if len(matches) >= max_results:
-                            break
-
-                        if item.is_dir() and query in item.name.lower():
-                            matches.append(str(item))
-
-            except (PermissionError, OSError):
-                # Skip directories we can't access
-                continue
+        # Use shared search function
+        matches = search_directories(query, max_results=15, max_depth=3)
 
         # Format results
         if matches:
@@ -502,11 +306,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Handle regular text messages and interface with Claude SDK.
 
     This function:
-    1. Loads user's session and cwd configuration
-    2. Configures ClaudeAgentOptions with user's settings
-    3. Sends message to Claude via SDK
-    4. Streams response back to Telegram
-    5. Saves updated session
+    1. Processes message through unified SDK executor
+    2. Gets response with observability (file logging, Sentry, PostHog)
+    3. Sends response back to Telegram
     """
     user = update.effective_user
     user_id = user.id
@@ -521,83 +323,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Received message from user {user_id} ({user.username}): {user_message[:50]}...")
 
     try:
-        # Load user's session and working directory
-        session_data = load_user_session(user_id)
-        session_id = None
-        cwd = None
-
-        if session_data:
-            session_id, cwd = session_data
-            if session_id:
-                logger.info(f"Resuming session for user {user_id}: {session_id}")
-
-        # Get working directory (from session or default)
-        if not cwd:
-            cwd = get_user_cwd(user_id)
-
-        logger.info(f"Using working directory for user {user_id}: {cwd}")
-
-        # Configure Claude Agent options
-        options_dict = {
-            "cwd": cwd,
-            "system_prompt": "You are Claude Code, a helpful AI assistant powered by Claude Sonnet 4.5. You help users with code, file operations, and technical tasks.",
-            "allowed_tools": ["Read", "Write", "Bash", "Edit"],
-        }
-
-        # Add resume parameter if we have a session ID
-        if session_id:
-            options_dict["resume"] = session_id
-
-        options = ClaudeAgentOptions(**options_dict)
-
         # Send "typing" indicator
         await update.message.chat.send_action("typing")
 
-        # Initialize response collectors
-        response_parts = []
-        tool_uses = []
-        new_session_id = None
-
-        # Create Claude SDK client and send query
-        async with ClaudeSDKClient(options=options) as client:
-            await client.query(user_message)
-
-            # Stream response from Claude
-            async for message in client.receive_response():
-                if isinstance(message, AssistantMessage):
-                    for block in message.content:
-                        if isinstance(block, TextBlock):
-                            # Collect text response
-                            response_parts.append(block.text)
-                        elif isinstance(block, ToolUseBlock):
-                            # Track tool usage
-                            tool_uses.append(f"🔧 {block.name.upper()}")
-                            logger.info(f"Tool used: {block.name}")
-
-                elif isinstance(message, ResultMessage):
-                    # Capture session ID for persistence
-                    new_session_id = message.session_id
-                    logger.info(f"Received session ID: {new_session_id}")
-
-        # Build complete response
-        full_response = "".join(response_parts)
+        # Process message through Claude SDK (shared logic with observability)
+        response_text, tool_uses, new_session_id = await process_claude_message(
+            user_id=str(user_id),
+            user_message=user_message,
+            platform="telegram"
+        )
 
         # Add tool usage indicators if any tools were used
         if tool_uses:
-            tool_indicator = "\n\n" + " ".join(tool_uses)
-            full_response += tool_indicator
-
-        # Handle empty response
-        if not full_response.strip():
-            full_response = "I processed your request, but I don't have a text response to show."
+            response_text += format_tool_indicators(tool_uses)
 
         # Send response to user (handle Telegram message length limit)
-        await send_long_message(update.message.chat_id, full_response, context)
-
-        # Save session for future interactions
-        if new_session_id:
-            save_user_session(user_id, new_session_id, cwd)
-            logger.info(f"Saved session for user {user_id}")
+        await send_long_message(update.message.chat_id, response_text, context)
 
     except Exception as e:
         logger.error(f"Error handling message from user {user_id}: {e}", exc_info=True)
@@ -620,38 +361,15 @@ async def send_long_message(chat_id: int, text: str, context: ContextTypes.DEFAU
         text: Message text to send
         context: Bot context for sending messages
     """
-    if len(text) <= MAX_TELEGRAM_MESSAGE_LENGTH:
-        await context.bot.send_message(chat_id=chat_id, text=text)
-    else:
-        # Split message into chunks
-        chunks = []
-        current_chunk = ""
+    # Use shared function to split message
+    chunks = split_long_message(text, MAX_TELEGRAM_MESSAGE_LENGTH)
 
-        # Split by lines to avoid breaking mid-sentence
-        lines = text.split("\n")
-
-        for line in lines:
-            # If adding this line would exceed limit, start new chunk
-            if len(current_chunk) + len(line) + 1 > MAX_TELEGRAM_MESSAGE_LENGTH - 100:  # Leave buffer
-                if current_chunk:
-                    chunks.append(current_chunk)
-                    current_chunk = line
-            else:
-                if current_chunk:
-                    current_chunk += "\n" + line
-                else:
-                    current_chunk = line
-
-        # Add remaining chunk
-        if current_chunk:
-            chunks.append(current_chunk)
-
-        # Send all chunks
-        for i, chunk in enumerate(chunks):
-            if i > 0:
-                # Add indicator for continued messages
-                chunk = f"(continued {i+1}/{len(chunks)})\n\n{chunk}"
-            await context.bot.send_message(chat_id=chat_id, text=chunk)
+    # Send all chunks
+    for i, chunk in enumerate(chunks):
+        if i > 0:
+            # Add indicator for continued messages
+            chunk = f"(continued {i+1}/{len(chunks)})\n\n{chunk}"
+        await context.bot.send_message(chat_id=chat_id, text=chunk)
 
 
 def main():

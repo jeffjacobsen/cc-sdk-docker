@@ -17,8 +17,8 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from claude_code_sdk import query, ClaudeSDKClient, ClaudeCodeOptions
-from claude_code_sdk.types import AssistantMessage, TextBlock, ToolUseBlock, ResultMessage, ThinkingBlock
+from claude_agent_sdk import query, ClaudeSDKClient, ClaudeCodeOptions
+from claude_agent_sdk.types import AssistantMessage, TextBlock, ToolUseBlock, ResultMessage, ThinkingBlock
 
 # Import unified SDK executor
 from sdk_executor import (

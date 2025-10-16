@@ -47,3 +47,9 @@ build/
 .secrets/
 
 .claude/settings.local.json
+slack_sessions/*.json
+telegram_sessions/*.json
+logs/*.json
+logs/*.jsonl
+
+

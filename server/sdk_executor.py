@@ -1,5 +1,5 @@
 """
-Unified SDK Executor for Claude Code SDK
+Unified SDK Executor for Claude Agent SDK
 
 This module provides a single entry point for all Claude SDK calls across
 the application (FastAPI, Telegram bot, Slack bot, agent executor).
@@ -26,7 +26,7 @@ from dataclasses import dataclass, asdict, field
 from typing import Optional, List, Dict, Any, AsyncIterator, Tuple
 from pathlib import Path
 
-from claude_code_sdk.client import (
+from claude_agent_sdk import (
     ClaudeSDKClient,
     ClaudeAgentOptions,
     AssistantMessage,
@@ -546,6 +546,8 @@ class ClaudeExecutor:
 
         if config.allowed_tools:
             options_dict["allowed_tools"] = config.allowed_tools
+
+        options_dict["setting_sources"] = ["project", "user"]
 
         return ClaudeAgentOptions(**options_dict)
 

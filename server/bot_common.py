@@ -17,16 +17,18 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, TYPE_CHECKING
 
-from sdk_executor import (
-    ClaudeExecutor,
-    ExecutorConfig,
-    ResponseMode,
-    ThinkingMode,
-    ProcessedResponse,
-    get_executor
-)
+# Lazy import to avoid circular dependencies
+# Only imported when process_claude_message is called
+if TYPE_CHECKING:
+    from sdk_executor import (
+        ClaudeExecutor,
+        ExecutorConfig,
+        ResponseMode,
+        ThinkingMode,
+        ProcessedResponse,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -285,6 +287,14 @@ async def process_claude_message(
         - tool_uses: List of tools used (e.g., ["Read", "Bash"])
         - new_session_id: New session ID for persistence
     """
+    # Lazy import to avoid circular dependencies
+    from sdk_executor import (
+        ExecutorConfig,
+        ResponseMode,
+        ThinkingMode,
+        get_executor
+    )
+
     # Load user's session and working directory
     session_data = load_user_session(user_id, platform)
     session_id = None
