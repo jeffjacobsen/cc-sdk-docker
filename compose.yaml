@@ -59,7 +59,7 @@ services:
       - telegram-sessions:/app/telegram_sessions
     working_dir: /app
     user: root
-    command: bash -c "pip install -r /app/server/requirements.txt && exec su claude -c 'python /app/server/telegram_bot.py'"
+    command: bash -c "pip install -r /app/server/requirements.txt && mkdir -p /app/telegram_sessions && chown -R claude:claude /app/telegram_sessions && exec su claude -c 'python /app/server/telegram_bot.py'"
     restart: unless-stopped
     depends_on:
       - server
@@ -91,7 +91,7 @@ services:
       - slack-sessions:/app/slack_sessions
     working_dir: /app
     user: root
-    command: bash -c "pip install -r /app/server/requirements.txt && exec su claude -c 'python /app/server/slack_bot.py'"
+    command: bash -c "pip install -r /app/server/requirements.txt && mkdir -p /app/slack_sessions && chown -R claude:claude /app/slack_sessions && exec su claude -c 'python /app/server/slack_bot.py'"
     restart: unless-stopped
     depends_on:
       - server
