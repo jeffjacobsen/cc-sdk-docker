@@ -547,7 +547,7 @@ class ClaudeExecutor:
         if config.allowed_tools:
             options_dict["allowed_tools"] = config.allowed_tools
 
-        options_dict["setting_sources"] = ["project", "user"]
+        options_dict["setting_sources"] = ["project", "user", "local"]
 
         return ClaudeAgentOptions(**options_dict)
 

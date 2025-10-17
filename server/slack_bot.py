@@ -54,6 +54,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+logging.getLogger('httpx').setLevel(logging.ERROR)
 
 # Slack message length limit (recommended, actual is 40k but we chunk at 3k)
 MAX_SLACK_MESSAGE_LENGTH = 3000
