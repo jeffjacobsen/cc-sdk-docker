@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-FastAPI server for testing Claude Code SDK in Docker
+FastAPI server for testing Claude Agent SDK in Docker
 Provides HTTP endpoints for interacting with Claude Code
 """
 
@@ -16,9 +16,13 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
 
-from claude_agent_sdk import query, ClaudeSDKClient, ClaudeCodeOptions
+from claude_agent_sdk import query, ClaudeSDKClient, ClaudeAgentOptions
 from claude_agent_sdk.types import AssistantMessage, TextBlock, ToolUseBlock, ResultMessage, ThinkingBlock
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Import unified SDK executor
 from sdk_executor import (
@@ -67,8 +71,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Claude Code SDK API",
-    description="HTTP API for testing Claude Code SDK in Docker",
+    title="Claude Agent SDK API",
+    description="HTTP API for testing Claude Agent SDK in Docker",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -126,8 +130,8 @@ def build_options(
     allowed_tools: Optional[List[str]] = None,
     permission_mode: Optional[str] = None,
     max_turns: Optional[int] = None
-) -> ClaudeCodeOptions:
-    """Build ClaudeCodeOptions from request parameters"""
+) -> ClaudeAgentOptions:
+    """Build ClaudeAgentOptions from request parameters"""
     options_dict = {}
 
     if model:
@@ -139,7 +143,7 @@ def build_options(
     if max_turns:
         options_dict['max_turns'] = max_turns
 
-    return ClaudeCodeOptions(**options_dict) if options_dict else ClaudeCodeOptions()
+    return ClaudeAgentOptions(**options_dict) if options_dict else ClaudeAgentOptions()
 
 
 # API Endpoints
