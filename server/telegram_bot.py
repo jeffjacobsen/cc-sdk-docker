@@ -314,12 +314,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
     user_message = update.message.text
 
-    # Handle \/ escape for slash commands
-    # If message starts with \/, replace it with / so Claude can interpret it
-    if user_message.startswith("\\/"):
-        user_message = "/" + user_message[2:]
-        logger.info(f"Converted \\/ escape to / for command: {user_message[:50]}...")
-
     logger.info(f"Received message from user {user_id} ({user.username}): {user_message[:50]}...")
 
     try:

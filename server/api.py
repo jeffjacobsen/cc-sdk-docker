@@ -46,12 +46,9 @@ async def lifespan(app: FastAPI):
 
     # Check authentication
     oauth_token = os.getenv('CLAUDE_CODE_OAUTH_TOKEN')
-    session_token = os.getenv('CLAUDE_CODE_SESSION')
 
     if oauth_token:
         print(f"✓ OAuth token found: {oauth_token[:20]}...")
-    elif session_token:
-        print(f"✓ Session token found: {session_token[:20]}...")
     else:
         print("⚠️  WARNING: No authentication token found!")
         print("   Set CLAUDE_CODE_OAUTH_TOKEN environment variable")
@@ -169,11 +166,10 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     oauth_token = os.getenv('CLAUDE_CODE_OAUTH_TOKEN')
-    session_token = os.getenv('CLAUDE_CODE_SESSION')
 
     return {
         "status": "healthy",
-        "authenticated": bool(oauth_token or session_token),
+        "authenticated": bool(oauth_token),
         "active_sessions": len(active_sessions),
         "timestamp": datetime.now().isoformat()
     }

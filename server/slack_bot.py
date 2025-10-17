@@ -335,12 +335,6 @@ async def handle_message(event, say):
     text = event.get('text', '')
     thread_ts = event.get('thread_ts', event.get('ts'))
 
-    # Handle \/ escape for slash commands
-    # If message starts with \/, replace it with / so Claude can interpret it
-    if text.startswith("\\/"):
-        text = "/" + text[2:]
-        logger.info(f"Converted \\/ escape to / for command: {text[:50]}...")
-
     logger.info(f"Received message from user {user_id}: {text[:50]}...")
 
     try:
@@ -419,12 +413,6 @@ async def handle_mention(event, say):
     # Format: "<@U123ABC> message here" -> "message here"
     import re
     text = re.sub(r'<@[A-Z0-9]+>', '', text).strip()
-
-    # Handle \/ escape for slash commands
-    # If message starts with \/, replace it with / so Claude can interpret it
-    if text.startswith("\\/"):
-        text = "/" + text[2:]
-        logger.info(f"Converted \\/ escape to / for command: {text[:50]}...")
 
     if not text:
         await say(
