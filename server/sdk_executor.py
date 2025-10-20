@@ -132,17 +132,21 @@ class SentryBackend(ObservabilityBackend):
     def __init__(self):
         self.enabled = SENTRY_AVAILABLE and bool(os.getenv("SENTRY_DSN"))
         if self.enabled:
+            print(f"[DEBUG] Sentry: Initialized with DSN={os.getenv('SENTRY_DSN')[:20]}...")
             if not sentry_sdk.Hub.current.client:
                 sentry_sdk.init(
                     dsn=os.getenv("SENTRY_DSN"),
                     traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
                 )
+        else:
+            print(f"[DEBUG] Sentry: Disabled (available={SENTRY_AVAILABLE}, has_dsn={bool(os.getenv('SENTRY_DSN'))})")
         self.transaction = None
 
     def log_request_start(self, config: ExecutorConfig, prompt: str):
         if not self.enabled:
             return
 
+        print(f"[DEBUG] Sentry: Starting transaction for {config.platform or 'unknown'} user={config.user_id}")
         self.transaction = sentry_sdk.start_transaction(
             op="llm.request",
             name=f"claude_sdk_query_{config.platform or 'unknown'}"
@@ -167,12 +171,14 @@ class SentryBackend(ObservabilityBackend):
         if "duration_ms" in result.metrics:
             self.transaction.set_measurement("llm.duration_ms", result.metrics["duration_ms"])
 
+        print(f"[DEBUG] Sentry: Finishing transaction - duration={result.metrics.get('duration_ms', 0)}ms, tools={len(result.tool_uses)}")
         self.transaction.finish()
 
     def log_error(self, config: ExecutorConfig, error: Exception):
         if not self.enabled:
             return
 
+        print(f"[DEBUG] Sentry: Capturing exception - {type(error).__name__}: {error}")
         sentry_sdk.capture_exception(error)
         if self.transaction:
             self.transaction.finish()
@@ -187,8 +193,10 @@ class PostHogBackend(ObservabilityBackend):
 
         if self.enabled:
             host = os.getenv("POSTHOG_HOST", "https://app.posthog.com")
+            print(f"[DEBUG] PostHog: Initialized with host={host}, key={api_key[:10] if api_key else 'none'}...")
             self.client = Posthog(api_key, host=host)
         else:
+            print(f"[DEBUG] PostHog: Disabled (available={POSTHOG_AVAILABLE}, has_key={bool(api_key)})")
             self.client = None
 
         self.start_time = None
@@ -199,9 +207,10 @@ class PostHogBackend(ObservabilityBackend):
 
         self.start_time = time.time()
 
+        print(f"[DEBUG] PostHog: Sending 'llm_request_start' event - user={config.user_id or 'anonymous'}, platform={config.platform}")
         self.client.capture(
+            "llm_request_start",
             distinct_id=config.user_id or "anonymous",
-            event="llm_request_start",
             properties={
                 "platform": config.platform or "unknown",
                 "prompt_length": len(prompt),
@@ -219,9 +228,10 @@ class PostHogBackend(ObservabilityBackend):
         duration_ms = result.metrics.get("duration_ms", 0)
 
         # Main completion event
+        print(f"[DEBUG] PostHog: Sending 'llm_completion' event - user={config.user_id or 'anonymous'}, duration={duration_ms}ms, tools={result.tool_uses}")
         self.client.capture(
+            "llm_completion",
             distinct_id=config.user_id or "anonymous",
-            event="llm_completion",
             properties={
                 "platform": config.platform or "unknown",
                 "response_length": len(result.text),
@@ -238,9 +248,10 @@ class PostHogBackend(ObservabilityBackend):
         if not self.enabled:
             return
 
+        print(f"[DEBUG] PostHog: Sending 'llm_error' event - user={config.user_id or 'anonymous'}, error={type(error).__name__}")
         self.client.capture(
+            "llm_error",
             distinct_id=config.user_id or "anonymous",
-            event="llm_error",
             properties={
                 "platform": config.platform or "unknown",
                 "error_type": type(error).__name__,
