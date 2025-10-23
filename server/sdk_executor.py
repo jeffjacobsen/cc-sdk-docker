@@ -17,14 +17,10 @@ Environment variables:
 - POSTHOG_HOST: PostHog host (default: https://app.posthog.com)
 """
 
-import os
-import json
 import time
-import asyncio
 from enum import Enum
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any, AsyncIterator, Tuple
-from pathlib import Path
 
 from claude_agent_sdk import (
     ClaudeSDKClient,
@@ -37,18 +33,7 @@ from claude_agent_sdk import (
     ThinkingBlock,
 )
 
-# Optional imports based on environment
-try:
-    import sentry_sdk
-    SENTRY_AVAILABLE = True
-except ImportError:
-    SENTRY_AVAILABLE = False
-
-try:
-    from posthog import Posthog
-    POSTHOG_AVAILABLE = True
-except ImportError:
-    POSTHOG_AVAILABLE = False
+from observability import ObservabilityHub
 
 
 # ============================================================================
@@ -103,287 +88,6 @@ class ProcessedResponse:
 
 
 # ============================================================================
-# Observability Backends
-# ============================================================================
-
-class ObservabilityBackend:
-    """Base class for observability backends"""
-
-    def log_request_start(self, config: ExecutorConfig, prompt: str):
-        """Called when SDK request starts"""
-        pass
-
-    def log_message_received(self, config: ExecutorConfig, message: Any):
-        """Called for each message received from SDK"""
-        pass
-
-    def log_completion(self, config: ExecutorConfig, result: ProcessedResponse):
-        """Called when SDK request completes"""
-        pass
-
-    def log_error(self, config: ExecutorConfig, error: Exception):
-        """Called when SDK request fails"""
-        pass
-
-
-class SentryBackend(ObservabilityBackend):
-    """Sentry integration for error tracking and transactions"""
-
-    def __init__(self):
-        self.enabled = SENTRY_AVAILABLE and bool(os.getenv("SENTRY_DSN"))
-        if self.enabled:
-            print(f"[DEBUG] Sentry: Initialized with DSN={os.getenv('SENTRY_DSN')[:20]}...")
-            if not sentry_sdk.Hub.current.client:
-                sentry_sdk.init(
-                    dsn=os.getenv("SENTRY_DSN"),
-                    traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
-                )
-        else:
-            print(f"[DEBUG] Sentry: Disabled (available={SENTRY_AVAILABLE}, has_dsn={bool(os.getenv('SENTRY_DSN'))})")
-        self.transaction = None
-
-    def log_request_start(self, config: ExecutorConfig, prompt: str):
-        if not self.enabled:
-            return
-
-        print(f"[DEBUG] Sentry: Starting transaction for {config.platform or 'unknown'} user={config.user_id}")
-        self.transaction = sentry_sdk.start_transaction(
-            op="llm.request",
-            name=f"claude_sdk_query_{config.platform or 'unknown'}"
-        )
-        self.transaction.set_tag("platform", config.platform or "unknown")
-        self.transaction.set_tag("user_id", config.user_id or "anonymous")
-        self.transaction.set_context("llm", {
-            "model": "claude",
-            "prompt_length": len(prompt),
-            "has_session": bool(config.session_id),
-        })
-
-    def log_completion(self, config: ExecutorConfig, result: ProcessedResponse):
-        if not self.enabled or not self.transaction:
-            return
-
-        # Add measurements
-        self.transaction.set_measurement("llm.response_length", len(result.text))
-        self.transaction.set_measurement("llm.tool_uses", len(result.tool_uses))
-        self.transaction.set_measurement("llm.thinking_blocks", len(result.thinking_blocks))
-
-        if "duration_ms" in result.metrics:
-            self.transaction.set_measurement("llm.duration_ms", result.metrics["duration_ms"])
-
-        print(f"[DEBUG] Sentry: Finishing transaction - duration={result.metrics.get('duration_ms', 0)}ms, tools={len(result.tool_uses)}")
-        self.transaction.finish()
-
-    def log_error(self, config: ExecutorConfig, error: Exception):
-        if not self.enabled:
-            return
-
-        print(f"[DEBUG] Sentry: Capturing exception - {type(error).__name__}: {error}")
-        sentry_sdk.capture_exception(error)
-        if self.transaction:
-            self.transaction.finish()
-
-
-class PostHogBackend(ObservabilityBackend):
-    """PostHog integration for LLM analytics"""
-
-    def __init__(self):
-        api_key = os.getenv("POSTHOG_API_KEY")
-        self.enabled = POSTHOG_AVAILABLE and bool(api_key)
-
-        if self.enabled:
-            host = os.getenv("POSTHOG_HOST", "https://app.posthog.com")
-            print(f"[DEBUG] PostHog: Initialized with host={host}, key={api_key[:10] if api_key else 'none'}...")
-            self.client = Posthog(api_key, host=host)
-        else:
-            print(f"[DEBUG] PostHog: Disabled (available={POSTHOG_AVAILABLE}, has_key={bool(api_key)})")
-            self.client = None
-
-        self.start_time = None
-
-    def log_request_start(self, config: ExecutorConfig, prompt: str):
-        if not self.enabled:
-            return
-
-        self.start_time = time.time()
-
-        print(f"[DEBUG] PostHog: Sending 'llm_request_start' event - user={config.user_id or 'anonymous'}, platform={config.platform}")
-        self.client.capture(
-            "llm_request_start",
-            distinct_id=config.user_id or "anonymous",
-            properties={
-                "platform": config.platform or "unknown",
-                "prompt_length": len(prompt),
-                "has_session": bool(config.session_id),
-                "thinking_mode": config.thinking_mode.value,
-                "response_mode": config.response_mode.value,
-                **config.metadata,
-            }
-        )
-
-    def log_completion(self, config: ExecutorConfig, result: ProcessedResponse):
-        if not self.enabled:
-            return
-
-        duration_ms = result.metrics.get("duration_ms", 0)
-
-        # Main completion event
-        print(f"[DEBUG] PostHog: Sending 'llm_completion' event - user={config.user_id or 'anonymous'}, duration={duration_ms}ms, tools={result.tool_uses}")
-        self.client.capture(
-            "llm_completion",
-            distinct_id=config.user_id or "anonymous",
-            properties={
-                "platform": config.platform or "unknown",
-                "response_length": len(result.text),
-                "tool_uses": len(result.tool_uses),
-                "tool_list": result.tool_uses,
-                "thinking_blocks": len(result.thinking_blocks),
-                "duration_ms": duration_ms,
-                "has_session": bool(result.session_id),
-                **config.metadata,
-            }
-        )
-
-    def log_error(self, config: ExecutorConfig, error: Exception):
-        if not self.enabled:
-            return
-
-        print(f"[DEBUG] PostHog: Sending 'llm_error' event - user={config.user_id or 'anonymous'}, error={type(error).__name__}")
-        self.client.capture(
-            "llm_error",
-            distinct_id=config.user_id or "anonymous",
-            properties={
-                "platform": config.platform or "unknown",
-                "error_type": type(error).__name__,
-                "error_message": str(error),
-                **config.metadata,
-            }
-        )
-
-
-class FileLoggingBackend(ObservabilityBackend):
-    """File-based logging in JSONL format (like agent_executor.py)"""
-
-    def __init__(self, log_dir: str = "logs"):
-        self.log_dir = Path(log_dir)
-        self.log_dir.mkdir(exist_ok=True)
-        self.enabled = True
-        self.start_time = None
-
-    def log_request_start(self, config: ExecutorConfig, prompt: str):
-        self.start_time = time.time()
-        log_file = self.log_dir / f"{config.platform or 'sdk'}_requests.jsonl"
-
-        with open(log_file, "a") as f:
-            json.dump({
-                "timestamp": time.time(),
-                "event": "request_start",
-                "user_id": config.user_id,
-                "platform": config.platform,
-                "prompt_length": len(prompt),
-                "prompt_preview": prompt[:200],
-                "session_id": config.session_id,
-            }, f)
-            f.write("\n")
-
-    def log_completion(self, config: ExecutorConfig, result: ProcessedResponse):
-        log_file = self.log_dir / f"{config.platform or 'sdk'}_requests.jsonl"
-
-        with open(log_file, "a") as f:
-            json.dump({
-                "timestamp": time.time(),
-                "event": "request_complete",
-                "user_id": config.user_id,
-                "platform": config.platform,
-                "response_length": len(result.text),
-                "tool_uses": result.tool_uses,
-                "thinking_blocks_count": len(result.thinking_blocks),
-                "session_id": result.session_id,
-                "metrics": result.metrics,
-            }, f)
-            f.write("\n")
-
-    def log_error(self, config: ExecutorConfig, error: Exception):
-        log_file = self.log_dir / f"{config.platform or 'sdk'}_requests.jsonl"
-
-        with open(log_file, "a") as f:
-            json.dump({
-                "timestamp": time.time(),
-                "event": "request_error",
-                "user_id": config.user_id,
-                "platform": config.platform,
-                "error_type": type(error).__name__,
-                "error_message": str(error),
-            }, f)
-            f.write("\n")
-
-
-class ConsoleBackend(ObservabilityBackend):
-    """Console logging for development"""
-
-    def __init__(self):
-        self.enabled = os.getenv("DEBUG", "").lower() in ("1", "true", "yes")
-
-    def log_request_start(self, config: ExecutorConfig, prompt: str):
-        if self.enabled:
-            print(f"[SDK] Request start: user={config.user_id}, platform={config.platform}, prompt_len={len(prompt)}")
-
-    def log_completion(self, config: ExecutorConfig, result: ProcessedResponse):
-        if self.enabled:
-            print(f"[SDK] Request complete: response_len={len(result.text)}, tools={len(result.tool_uses)}, duration={result.metrics.get('duration_ms', 0)}ms")
-
-    def log_error(self, config: ExecutorConfig, error: Exception):
-        if self.enabled:
-            print(f"[SDK] Request error: {type(error).__name__}: {error}")
-
-
-class ObservabilityHub:
-    """Manages multiple observability backends"""
-
-    def __init__(self, backends: Optional[List[ObservabilityBackend]] = None):
-        if backends is None:
-            # Auto-configure based on environment
-            backends = [
-                SentryBackend(),
-                PostHogBackend(),
-                ConsoleBackend(),
-            ]
-            # Add file logging if explicitly enabled
-            if os.getenv("FILE_LOGGING", "").lower() in ("1", "true", "yes"):
-                backends.append(FileLoggingBackend())
-
-        self.backends = [b for b in backends if getattr(b, 'enabled', True)]
-
-    def log_request_start(self, config: ExecutorConfig, prompt: str):
-        for backend in self.backends:
-            try:
-                backend.log_request_start(config, prompt)
-            except Exception as e:
-                print(f"[SDK] Observability error in {type(backend).__name__}: {e}")
-
-    def log_message_received(self, config: ExecutorConfig, message: Any):
-        for backend in self.backends:
-            try:
-                backend.log_message_received(config, message)
-            except Exception as e:
-                print(f"[SDK] Observability error in {type(backend).__name__}: {e}")
-
-    def log_completion(self, config: ExecutorConfig, result: ProcessedResponse):
-        for backend in self.backends:
-            try:
-                backend.log_completion(config, result)
-            except Exception as e:
-                print(f"[SDK] Observability error in {type(backend).__name__}: {e}")
-
-    def log_error(self, config: ExecutorConfig, error: Exception):
-        for backend in self.backends:
-            try:
-                backend.log_error(config, error)
-            except Exception as e:
-                print(f"[SDK] Observability error in {type(backend).__name__}: {e}")
-
-
-# ============================================================================
 # Response Processing
 # ============================================================================
 
@@ -400,10 +104,10 @@ class ResponseProcessor:
         self.session_id: Optional[str] = None
         self.raw_messages: List[Any] = []
 
-    def process_message(self, message: Any):
+    def process_message(self, message: Any, message_count: int):
         """Process a single message from SDK"""
         self.raw_messages.append(message)
-        self.hub.log_message_received(self.config, message)
+        self.hub.log_message_received(self.config, message, message_count)
 
         if isinstance(message, AssistantMessage):
             for block in message.content:
@@ -479,6 +183,7 @@ class ClaudeExecutor:
     async def execute(self, prompt: str, config: ExecutorConfig) -> ProcessedResponse:
         """Execute SDK query with observability"""
         start_time = time.time()
+        message_count = 0
 
         try:
             # Log request start
@@ -494,7 +199,8 @@ class ClaudeExecutor:
                 await client.query(prompt)
 
                 async for message in client.receive_response():
-                    processor.process_message(message)
+                    message_count += 1
+                    processor.process_message(message, message_count)
 
             # Build final response
             result = processor.get_final_response()
@@ -516,6 +222,7 @@ class ClaudeExecutor:
     ) -> AsyncIterator[Tuple[Any, Optional[ProcessedResponse]]]:
         """Execute SDK query with streaming response (for FastAPI SSE)"""
         start_time = time.time()
+        message_count = 0
 
         try:
             self.hub.log_request_start(config, prompt)
@@ -527,7 +234,8 @@ class ClaudeExecutor:
                 await client.query(prompt)
 
                 async for message in client.receive_response():
-                    processor.process_message(message)
+                    message_count += 1
+                    processor.process_message(message, message_count)
                     yield message, None
 
             # Build final response with metrics
