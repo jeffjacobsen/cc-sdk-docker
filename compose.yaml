@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     # Tag the built image locally (includes both TypeScript and Python)
-    image: ${IMAGE_NAME:-claude-code-sdk:latest}
+    image: ${IMAGE_NAME:-claude-agent-sdk:latest}
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
     environment:
@@ -40,7 +40,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${IMAGE_NAME:-claude-code-sdk:latest}
+    image: ${IMAGE_NAME:-claude-agent-sdk:latest}
     environment:
       # Claude Code OAuth Token (required)
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
@@ -70,7 +70,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${IMAGE_NAME:-claude-code-sdk:latest}
+    image: ${IMAGE_NAME:-claude-agent-sdk:latest}
     environment:
       # Claude Code OAuth Token (required)
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}

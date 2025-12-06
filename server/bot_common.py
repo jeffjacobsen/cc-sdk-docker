@@ -364,14 +364,21 @@ def split_long_message(text: str, max_length: int) -> List[str]:
     chunks = []
     current_chunk = ""
 
+    # Use a safety buffer: 10% of max_length, minimum 50 chars, maximum 200 chars
+    buffer = min(max(int(max_length * 0.1), 50), 200)
+    effective_limit = max(max_length - buffer, max_length // 2)  # At least half of max_length
+
     # Split by lines to avoid breaking mid-sentence
     lines = text.split("\n")
 
     for line in lines:
         # If adding this line would exceed limit, start new chunk
-        if len(current_chunk) + len(line) + 1 > max_length - 100:  # Leave buffer
+        if len(current_chunk) + len(line) + 1 > effective_limit:
             if current_chunk:
                 chunks.append(current_chunk)
+                current_chunk = line
+            else:
+                # Single line is too long, force it into a chunk
                 current_chunk = line
         else:
             if current_chunk:

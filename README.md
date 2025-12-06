@@ -1,12 +1,12 @@
-# Claude Code SDK Docker Example
+# Claude Agent SDK Docker Example
 
-A simple Docker container with Claude Code SDK (Python + TypeScript) and an example FastAPI server to help you get started building Claude-powered applications.
+A simple Docker container with Claude Agent SDK (Python + TypeScript) and an example FastAPI server to help you get started building Claude-powered applications.
 
 ## What Is This?
 
 This repository provides:
-- **Docker container** with Claude Code Python SDK and TypeScript SDK pre-installed
-- **Example FastAPI server** that exposes the Claude Code SDK via HTTP REST API
+- **Docker container** with Claude AgentPython SDK and TypeScript SDK pre-installed
+- **Example FastAPI server** that exposes the Claude Agent SDK via HTTP REST API
 - **Telegram bot** for interactive chat with Claude via Telegram
 - **Slack bot** for interactive chat with Claude via Slack
 - **Sample client code** showing how to interact with the server
@@ -384,8 +384,8 @@ The guide covers:
 
 ## Resources
 
-- [Claude Code SDK Python Docs](https://docs.claude.com/en/docs/claude-code/sdk/sdk-python)
-- [Claude Code SDK TypeScript Docs](https://docs.claude.com/en/docs/claude-code/sdk/sdk-typescript)
+- [Claude Code SDK Python Docs](https://platform.claude.com/docs/en/agent-sdk/python)
+- [Claude Code SDK TypeScript Docs](https://platform.claude.com/docs/en/agent-sdk/typescript)
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
 

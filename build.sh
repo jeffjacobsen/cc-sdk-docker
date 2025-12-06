@@ -62,10 +62,10 @@ echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━�
 docker build \
   $CACHE_FLAG \
   -f Dockerfile \
-  -t claude-code-sdk:latest \
+  -t claude-agent-sdk:latest \
   .
 
-echo -e "${GREEN}✓ Debian image built: claude-code-sdk:latest${NC}"
+echo -e "${GREEN}✓ Debian image built: claude-agent-sdk:latest${NC}"
 echo -e "${GREEN}  Includes: TypeScript SDK + Python SDK${NC}"
 
 # Summary
@@ -75,7 +75,7 @@ echo "✓ Build Complete!"
 echo "==========================================${NC}"
 echo ""
 echo "Available images:"
-docker images | grep -E "claude-code-sdk|REPOSITORY" | head -10
+docker images | grep -E "claude-agent-sdk|REPOSITORY" | head -10
 
 echo ""
 echo -e "${BLUE}Next steps:${NC}"

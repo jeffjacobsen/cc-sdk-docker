@@ -209,17 +209,18 @@ def test_session_functions():
     checks = []
 
     try:
-        # Import session functions
-        from telegram_bot import (
+        # Import session functions from bot_common
+        from bot_common import (
             save_user_session,
             load_user_session,
             set_user_cwd,
             get_user_cwd,
             clear_user_session,
-            SESSIONS_DIR
+            get_sessions_dir
         )
 
-        # Create sessions directory if it doesn't exist
+        # Get sessions directory for telegram platform
+        SESSIONS_DIR = get_sessions_dir("telegram")
         SESSIONS_DIR.mkdir(exist_ok=True)
 
         # Test with a fake user ID
@@ -227,18 +228,18 @@ def test_session_functions():
         test_session_id = "test-session-123"
         test_cwd = "/tmp"
 
-        # Test save
+        # Test save (platform parameter required)
         try:
-            save_user_session(test_user_id, test_session_id, test_cwd)
+            save_user_session(test_user_id, test_session_id, test_cwd, platform="telegram")
             print_test("save_user_session()", True, "Session saved successfully")
             checks.append(True)
         except Exception as e:
             print_test("save_user_session()", False, f"Error: {e}")
             checks.append(False)
 
-        # Test load
+        # Test load (platform parameter required)
         try:
-            loaded = load_user_session(test_user_id)
+            loaded = load_user_session(test_user_id, platform="telegram")
             if loaded and loaded[0] == test_session_id and loaded[1] == test_cwd:
                 print_test("load_user_session()", True, f"Loaded: {loaded}")
                 checks.append(True)
@@ -249,11 +250,11 @@ def test_session_functions():
             print_test("load_user_session()", False, f"Error: {e}")
             checks.append(False)
 
-        # Test set_user_cwd
+        # Test set_user_cwd (platform parameter required)
         try:
             new_cwd = "/home"
-            set_user_cwd(test_user_id, new_cwd)
-            retrieved_cwd = get_user_cwd(test_user_id)
+            set_user_cwd(test_user_id, new_cwd, platform="telegram")
+            retrieved_cwd = get_user_cwd(test_user_id, platform="telegram")
             if retrieved_cwd == new_cwd:
                 print_test("set_user_cwd() / get_user_cwd()", True, f"CWD: {retrieved_cwd}")
                 checks.append(True)
@@ -264,10 +265,10 @@ def test_session_functions():
             print_test("set_user_cwd() / get_user_cwd()", False, f"Error: {e}")
             checks.append(False)
 
-        # Test clear
+        # Test clear (platform parameter required)
         try:
-            clear_user_session(test_user_id)
-            loaded = load_user_session(test_user_id)
+            clear_user_session(test_user_id, platform="telegram")
+            loaded = load_user_session(test_user_id, platform="telegram")
             if loaded is None or loaded[0] is None:
                 print_test("clear_user_session()", True, "Session cleared, CWD preserved")
                 checks.append(True)

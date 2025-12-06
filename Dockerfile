@@ -43,7 +43,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Install Python SDK and Telegram bot dependencies in the virtual environment
 RUN pip install --no-cache-dir \
-    claude-code-sdk \
+    claude-agent-sdk \
     python-telegram-bot \
     python-dotenv
 
@@ -69,8 +69,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy Node.js global packages from node-builder
 COPY --from=node-builder /usr/local/lib/node_modules /usr/local/lib/node_modules
 COPY --from=node-builder /usr/local/bin/ /usr/local/bin/
-# Copy yoga.wasm to the same directory as claude binary
-COPY --from=node-builder /usr/local/lib/node_modules/@anthropic-ai/claude-code/yoga.wasm /usr/local/bin/yoga.wasm
 
 # Copy Python virtual environment from python-builder
 COPY --from=python-builder /opt/venv /opt/venv
