@@ -5,9 +5,10 @@ This file provides guidance to Claude Code when working with this repository.
 ## Project Purpose
 
 This is a **simple example project** that demonstrates how to:
-1. Package the Claude Code SDK (both Python and TypeScript) in a Docker container
+1. Package the Claude Agent SDK (both Python and TypeScript) in a Docker container
 2. Run an example FastAPI server that exposes Claude Code SDK functionality via HTTP REST API
-3. Serve as a starting point for building more advanced Claude-powered servers
+3. Provide Telegram and Slack bots for interactive Claude Code access
+4. Serve as a starting point for building more advanced Claude-powered servers
 
 ## The Problem This Solves
 
@@ -27,17 +28,39 @@ The Claude Code SDK normally uses interactive browser-based OAuth authentication
 - **Stage 3**: Runtime image with both SDKs + server code
 - **Non-root user**: Runs as `claude` user for security
 
-### Example Server
+### Example Server & Bots
 - **FastAPI** HTTP server ([server/api.py](server/api.py))
-- **REST endpoints** for interacting with Claude Code SDK
-- **Features**:
+  - REST endpoints for interacting with Claude Code SDK
   - One-off queries (stateless)
   - Conversation sessions (stateful, maintains context)
   - Streaming responses via Server-Sent Events
   - Tool permission controls
 
+- **Telegram bot** ([server/telegram_bot.py](server/telegram_bot.py))
+  - Direct message chat interface
+  - Per-user sessions and working directories
+  - Bot commands (`/start`, `/help`, `/setcwd`, `/reset`, etc.)
+
+- **Slack bot** ([server/slack_bot.py](server/slack_bot.py))
+  - Direct message and channel support
+  - Per-user sessions and working directories
+  - Slash commands and threaded replies
+
+- **Shared bot logic** ([server/bot_common.py](server/bot_common.py))
+  - 95% code reuse between Telegram and Slack bots
+  - Unified session management
+  - Common Claude SDK integration
+
+- **Unified SDK executor** ([server/sdk_executor.py](server/sdk_executor.py))
+  - Single entry point for all Claude SDK calls
+  - Integrated observability (Sentry, PostHog, file logging)
+  - Flexible response modes and thinking block controls
+
 ### Docker Compose Setup
-- **Single service** (`server`) defined in [compose.yaml](compose.yaml)
+- **Three services** defined in [compose.yaml](compose.yaml):
+  - `server` - FastAPI REST API (port 3000)
+  - `telegram-bot` - Telegram bot (polling)
+  - `slack-bot` - Slack bot (Socket Mode)
 - **Environment variables** for authentication
 - **Volume mounts** for development (bind mount current directory)
 - **Health checks** to verify server is running
@@ -48,19 +71,27 @@ The Claude Code SDK normally uses interactive browser-based OAuth authentication
 ```
 .
 ├── Dockerfile              # Single unified image (TypeScript + Python)
-├── compose.yaml            # Single service configuration
+├── compose.yaml            # Three services: server, telegram-bot, slack-bot
 ├── build.sh                # Build helper script
 ├── server/
 │   ├── api.py             # FastAPI server implementation
-│   ├── requirements.txt   # Python dependencies for server
-│   └── README.md          # Quick reference
+│   ├── telegram_bot.py    # Telegram bot implementation
+│   ├── slack_bot.py       # Slack bot implementation
+│   ├── bot_common.py      # Shared bot logic (95% code reuse)
+│   ├── sdk_executor.py    # Unified SDK executor with observability
+│   ├── agent_executor.py  # Legacy agent executor
+│   ├── requirements.txt   # Python dependencies (server + bots)
+│   ├── test_telegram_bot.py  # Telegram bot test script
+│   └── test_slack_bot.py     # Slack bot test script
 ├── examples/client/       # Test clients
 │   ├── test_server.py     # Python client
 │   ├── test_server.sh     # Bash client
 │   └── curl-examples.md   # HTTP examples
 ├── docs/
 │   ├── AUTHENTICATION.md  # How authentication works
-│   ├── SERVER.md          # API documentation
+│   ├── SERVER.md          # FastAPI API reference
+│   ├── TELEGRAM.md        # Telegram bot complete guide
+│   ├── SLACK.md           # Slack bot complete guide
 │   └── DEPLOYMENT.md      # Production deployment guide
 └── scripts/
     └── docker-entrypoint.sh  # Container startup script
@@ -75,16 +106,30 @@ The Claude Code SDK normally uses interactive browser-based OAuth authentication
 - Copies example code and scripts
 
 ### [compose.yaml](compose.yaml)
-- Defines the `server` service
+- Defines three services: `server`, `telegram-bot`, `slack-bot`
 - Mounts current directory for development
 - Sets environment variables for authentication
-- Configures health checks
+- Configures health checks and volume mounts
 
 ### [server/api.py](server/api.py)
 - FastAPI application
 - Implements REST endpoints for Claude interactions
 - Manages conversation sessions in memory
 - Handles streaming responses
+
+### [server/bot_common.py](server/bot_common.py)
+- Shared session management (save/load/clear per user)
+- Working directory configuration
+- Claude SDK integration via unified executor
+- Message utilities (splitting, formatting, tool indicators)
+- 95% code reuse between Telegram and Slack bots
+
+### [server/sdk_executor.py](server/sdk_executor.py)
+- Unified entry point for all Claude SDK calls
+- Integrated observability: Sentry, PostHog, file logging, console
+- Flexible response modes: stream, buffer text, buffer all
+- Thinking block control: include, exclude, log only
+- Automatic tool tracking and metrics
 
 ### [scripts/docker-entrypoint.sh](scripts/docker-entrypoint.sh)
 - Container startup script
@@ -97,9 +142,11 @@ When modifying this repository:
 
 1. **Keep it simple** - This is meant to be an example/starting point, not a production framework
 2. **Authentication via environment variables** - Don't change this; it's the core solution
-3. **Maintain both SDKs** - The image supports both Python and TypeScript
-4. **Test with the example clients** - Use [examples/client/test_server.py](examples/client/test_server.py) to verify changes
-5. **Update documentation** - Keep [README.md](README.md) and [docs/SERVER.md](docs/SERVER.md) in sync with code changes
+3. **Maintain both SDKs** - The image supports both Python (claude-agent-sdk) and TypeScript
+4. **Use unified SDK executor** - All bots now use [server/sdk_executor.py](server/sdk_executor.py) for consistent observability
+5. **Share code between bots** - Telegram and Slack bots share 95% of code via [server/bot_common.py](server/bot_common.py)
+6. **Test with the example clients** - Use test scripts to verify changes
+7. **Update documentation** - Keep [README.md](README.md) and docs in sync with code changes
 
 ## Common Tasks
 

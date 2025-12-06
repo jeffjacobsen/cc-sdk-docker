@@ -41,11 +41,11 @@ fi
 # Check 3: Local images built
 echo -e "\n${BLUE}3. Checking for local images...${NC}"
 
-PYTHON_EXISTS=$(docker images -q claude-code-sdk:latest 2>/dev/null)
+PYTHON_EXISTS=$(docker images -q claude-agent-sdk:latest 2>/dev/null)
 
 if [ -n "$PYTHON_EXISTS" ]; then
     echo -e "${GREEN}✓ Python image found${NC}"
-    docker images claude-code-sdk:latest --format "  Image: {{.Repository}}:{{.Tag}} ({{.Size}})"
+    docker images claude-agent-sdk:latest --format "  Image: {{.Repository}}:{{.Tag}} ({{.Size}})"
 else
     echo -e "${YELLOW}⚠ Python image not found${NC}"
     echo "  Run: ./build.sh"

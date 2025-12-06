@@ -1,12 +1,51 @@
-# FastAPI Server API Reference
+# FastAPI Server Documentation
 
-Complete API documentation for the Claude Code SDK FastAPI server.
+Complete guide and API reference for the Claude Code SDK FastAPI server.
+
+## Quick Start
+
+```bash
+# Make sure you have your OAuth token
+export CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-your-token-here
+
+# Start the server
+docker compose up -d
+
+# View logs
+docker compose logs -f server
+
+# Test the API
+curl http://localhost:3000/health
+```
 
 ## Quick Links
 
 - **Interactive Docs**: http://localhost:3000/docs (Swagger UI)
 - **Alternative Docs**: http://localhost:3000/redoc (ReDoc)
 - **Health Check**: http://localhost:3000/health
+
+## Common Commands
+
+```bash
+# Stop server
+docker compose down
+
+# Restart server
+docker compose restart
+
+# View logs
+docker compose logs -f server
+
+# Access container shell
+docker compose exec server bash
+
+# Check if server is running
+docker compose ps
+
+# Run test scripts
+python examples/client/test_server.py
+bash examples/client/test_server.sh
+```
 
 ## Base URL
 
@@ -482,9 +521,57 @@ You can test all endpoints directly from the browser!
 
 ---
 
+## Troubleshooting
+
+### Server Won't Start
+
+```bash
+# Check logs
+docker compose logs server
+
+# Check authentication
+docker compose exec server env | grep CLAUDE
+
+# Rebuild if needed
+docker compose down
+docker compose up -d --build
+```
+
+### Connection Refused
+
+```bash
+# Check if server is running
+docker compose ps
+
+# Check port mapping
+docker compose port server 3000
+
+# Test health endpoint
+curl http://localhost:3000/health
+```
+
+### Session Not Found
+
+- Sessions are stored in-memory and lost on restart
+- Make sure you're using the correct session ID
+- Check if session was closed or expired
+
+### Authentication Errors
+
+```bash
+# Verify token is set
+echo $CLAUDE_CODE_OAUTH_TOKEN
+
+# Check health endpoint shows authenticated
+curl http://localhost:3000/health | jq '.authenticated'
+```
+
+---
+
 ## See Also
 
 - [Main README](../README.md) - Project overview and quick start
 - [Authentication Guide](AUTHENTICATION.md) - How to set up tokens
-- [Claude Code SDK Docs](https://docs.claude.com/en/docs/claude-code/sdk/sdk-python) - Official SDK documentation
+- [Deployment Guide](DEPLOYMENT.md) - Production deployment
+- [Claude Agent SDK Docs](https://github.com/anthropics/anthropic-sdk-python) - Official SDK documentation
 - [FastAPI Docs](https://fastapi.tiangolo.com/) - FastAPI framework documentation

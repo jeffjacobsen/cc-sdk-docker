@@ -17,16 +17,18 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, TYPE_CHECKING
 
-from claude_agent_sdk import (
-    ClaudeSDKClient,
-    ClaudeAgentOptions,
-    AssistantMessage,
-    TextBlock,
-    ToolUseBlock,
-    ResultMessage
-)
+# Lazy import to avoid circular dependencies
+# Only imported when process_claude_message is called
+if TYPE_CHECKING:
+    from sdk_executor import (
+        ClaudeExecutor,
+        ExecutorConfig,
+        ResponseMode,
+        ThinkingMode,
+        ProcessedResponse,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +193,7 @@ def clear_user_session(user_id: str, platform: str = "sessions"):
             # Keep only cwd, remove session_id
             new_data = {
                 "cwd": data.get("cwd"),
+                "show_thinking": data.get("show_thinking", False),
                 "created_at": data.get("created_at"),
                 "last_updated": datetime.utcnow().isoformat() + "Z"
             }
@@ -203,6 +206,62 @@ def clear_user_session(user_id: str, platform: str = "sessions"):
             logger.error(f"Error clearing session for user {user_id} ({platform}): {e}")
 
 
+def set_show_thinking(user_id: str, show_thinking: bool, platform: str = "sessions"):
+    """
+    Set whether to show thinking blocks for a user.
+
+    Args:
+        user_id: User ID (platform-specific)
+        show_thinking: Whether to show thinking blocks
+        platform: Platform name (e.g., "telegram", "slack")
+    """
+    sessions_dir = get_sessions_dir(platform)
+    session_file = sessions_dir / f"{user_id}.json"
+
+    # Load existing data or create new
+    session_data = {}
+    if session_file.exists():
+        with open(session_file, "r") as f:
+            session_data = json.load(f)
+
+    # Update show_thinking preference
+    session_data["show_thinking"] = show_thinking
+    session_data["last_updated"] = datetime.utcnow().isoformat() + "Z"
+
+    if "created_at" not in session_data:
+        session_data["created_at"] = session_data["last_updated"]
+
+    with open(session_file, "w") as f:
+        json.dump(session_data, f, indent=2)
+
+    logger.info(f"Set show_thinking for user {user_id} ({platform}): {show_thinking}")
+
+
+def get_show_thinking(user_id: str, platform: str = "sessions") -> bool:
+    """
+    Get whether to show thinking blocks for a user.
+
+    Args:
+        user_id: User ID (platform-specific)
+        platform: Platform name (e.g., "telegram", "slack")
+
+    Returns:
+        True if thinking blocks should be shown, False otherwise (default: False)
+    """
+    sessions_dir = get_sessions_dir(platform)
+    session_file = sessions_dir / f"{user_id}.json"
+
+    if session_file.exists():
+        try:
+            with open(session_file, "r") as f:
+                data = json.load(f)
+                return data.get("show_thinking", False)
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    return False
+
+
 # ==================== Claude SDK Integration ====================
 
 async def process_claude_message(
@@ -213,7 +272,7 @@ async def process_claude_message(
     allowed_tools: Optional[List[str]] = None
 ) -> Tuple[str, List[str], Optional[str]]:
     """
-    Process a user message through Claude SDK.
+    Process a user message through Claude SDK using the unified executor.
 
     Args:
         user_id: User ID (platform-specific)
@@ -228,6 +287,14 @@ async def process_claude_message(
         - tool_uses: List of tools used (e.g., ["Read", "Bash"])
         - new_session_id: New session ID for persistence
     """
+    # Lazy import to avoid circular dependencies
+    from sdk_executor import (
+        ExecutorConfig,
+        ResponseMode,
+        ThinkingMode,
+        get_executor
+    )
+
     # Load user's session and working directory
     session_data = load_user_session(user_id, platform)
     session_id = None
@@ -244,58 +311,36 @@ async def process_claude_message(
 
     logger.info(f"Using working directory for user {user_id} ({platform}): {cwd}")
 
-    # Configure Claude Agent options
-    options_dict = {
-        "cwd": cwd,
-        "system_prompt": system_prompt or "You are Claude Code, a helpful AI assistant powered by Claude Sonnet 4.5. You help users with code, file operations, and technical tasks.",
-        "allowed_tools": allowed_tools or ["Read", "Write", "Bash", "Edit"],
-    }
+    # Get user's thinking preference
+    show_thinking = get_show_thinking(user_id, platform)
+    thinking_mode = ThinkingMode.INCLUDE if show_thinking else ThinkingMode.EXCLUDE
 
-    # Add resume parameter if we have a session ID
-    if session_id:
-        options_dict["resume"] = session_id
+    # Configure executor
+    config = ExecutorConfig(
+        user_id=user_id,
+        platform=platform,
+        cwd=cwd,
+        session_id=session_id,
+        system_prompt=system_prompt or "You are Claude Code, a helpful AI assistant powered by Claude Sonnet 4.5. You help users with code, file operations, and technical tasks.",
+        allowed_tools=allowed_tools or ["Read", "Write", "Bash", "Edit"],
+        response_mode=ResponseMode.BUFFER_TEXT,
+        thinking_mode=thinking_mode,
+        include_tool_indicators=True,
+    )
 
-    options = ClaudeAgentOptions(**options_dict)
-
-    # Initialize response collectors
-    response_parts = []
-    tool_uses = []
-    new_session_id = None
-
-    # Create Claude SDK client and send query
-    async with ClaudeSDKClient(options=options) as client:
-        await client.query(user_message)
-
-        # Stream response from Claude
-        async for message in client.receive_response():
-            if isinstance(message, AssistantMessage):
-                for block in message.content:
-                    if isinstance(block, TextBlock):
-                        # Collect text response
-                        response_parts.append(block.text)
-                    elif isinstance(block, ToolUseBlock):
-                        # Track tool usage
-                        tool_uses.append(block.name)
-                        logger.info(f"Tool used: {block.name}")
-
-            elif isinstance(message, ResultMessage):
-                # Capture session ID for persistence
-                new_session_id = message.session_id
-                logger.info(f"Received session ID: {new_session_id}")
-
-    # Build complete response
-    full_response = "".join(response_parts)
+    # Execute query
+    executor = get_executor()
+    result = await executor.execute(user_message, config)
 
     # Handle empty response
-    if not full_response.strip():
-        full_response = "I processed your request, but I don't have a text response to show."
+    response_text = result.text if result.text.strip() else "I processed your request, but I don't have a text response to show."
 
     # Save session for future interactions
-    if new_session_id:
-        save_user_session(user_id, new_session_id, cwd, platform)
+    if result.session_id:
+        save_user_session(user_id, result.session_id, cwd, platform)
         logger.info(f"Saved session for user {user_id} ({platform})")
 
-    return full_response, tool_uses, new_session_id
+    return response_text, result.tool_uses, result.session_id
 
 
 # ==================== Message Utilities ====================
@@ -319,14 +364,21 @@ def split_long_message(text: str, max_length: int) -> List[str]:
     chunks = []
     current_chunk = ""
 
+    # Use a safety buffer: 10% of max_length, minimum 50 chars, maximum 200 chars
+    buffer = min(max(int(max_length * 0.1), 50), 200)
+    effective_limit = max(max_length - buffer, max_length // 2)  # At least half of max_length
+
     # Split by lines to avoid breaking mid-sentence
     lines = text.split("\n")
 
     for line in lines:
         # If adding this line would exceed limit, start new chunk
-        if len(current_chunk) + len(line) + 1 > max_length - 100:  # Leave buffer
+        if len(current_chunk) + len(line) + 1 > effective_limit:
             if current_chunk:
                 chunks.append(current_chunk)
+                current_chunk = line
+            else:
+                # Single line is too long, force it into a chunk
                 current_chunk = line
         else:
             if current_chunk:

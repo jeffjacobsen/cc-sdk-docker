@@ -43,14 +43,14 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Install Python SDK and Telegram bot dependencies in the virtual environment
 RUN pip install --no-cache-dir \
-    claude-code-sdk \
+    claude-agent-sdk \
     python-telegram-bot \
     python-dotenv
 
 # Stage 3: Runtime image with both TypeScript and Python
 FROM node:22-slim AS runtime
 
-# Install runtime dependencies including Python
+# Install runtime dependencies including Python and GitHub CLI
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     nano \
@@ -58,13 +58,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     curl \
     jq \
+    gnupg \
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y gh \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Node.js global packages from node-builder
 COPY --from=node-builder /usr/local/lib/node_modules /usr/local/lib/node_modules
 COPY --from=node-builder /usr/local/bin/ /usr/local/bin/
-# Copy yoga.wasm to the same directory as claude binary
-COPY --from=node-builder /usr/local/lib/node_modules/@anthropic-ai/claude-code/yoga.wasm /usr/local/bin/yoga.wasm
 
 # Copy Python virtual environment from python-builder
 COPY --from=python-builder /opt/venv /opt/venv

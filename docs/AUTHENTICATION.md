@@ -199,4 +199,4 @@ The container checks for authentication in this order:
 
 - [Main README](../README.md) - Project overview
 - [Server Documentation](SERVER.md) - API usage
-- [Claude Code SDK Docs](https://docs.claude.com/en/docs/claude-code/sdk/sdk-python) - Official SDK documentation
+- [Claude Code SDK Docs](https://platform.claude.com/docs/en/agent-sdk/python) - Official SDK documentation

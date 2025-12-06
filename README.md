@@ -1,12 +1,12 @@
-# Claude Code SDK Docker Example
+# Claude Agent SDK Docker Example
 
-A simple Docker container with Claude Code SDK (Python + TypeScript) and an example FastAPI server to help you get started building Claude-powered applications.
+A simple Docker container with Claude Agent SDK (Python + TypeScript) and an example FastAPI server to help you get started building Claude-powered applications.
 
 ## What Is This?
 
 This repository provides:
-- **Docker container** with Claude Code Python SDK and TypeScript SDK pre-installed
-- **Example FastAPI server** that exposes the Claude Code SDK via HTTP REST API
+- **Docker container** with Claude AgentPython SDK and TypeScript SDK pre-installed
+- **Example FastAPI server** that exposes the Claude Agent SDK via HTTP REST API
 - **Telegram bot** for interactive chat with Claude via Telegram
 - **Slack bot** for interactive chat with Claude via Slack
 - **Sample client code** showing how to interact with the server
@@ -78,7 +78,7 @@ Interactive API docs available at: http://localhost:3000/docs
 - **Python 3** - For running Python code
 - **Claude Code CLI** - Official CLI tool
 - **TypeScript SDK** - [@anthropic-ai/claude-code](https://www.npmjs.com/package/@anthropic-ai/claude-code)
-- **Python SDK** - [claude-code-sdk](https://pypi.org/project/claude-code-sdk/)
+- **Python SDK** - [claude-agent-sdk](https://pypi.org/project/claude-agent-sdk/)
 - **Development tools** - git, curl, jq, nano
 
 ### Example Server & Bots
@@ -101,27 +101,27 @@ Interactive API docs available at: http://localhost:3000/docs
 ```
 .
 ├── Dockerfile                    # Multi-stage build: Node.js + Python + Claude SDKs
-├── compose.yaml                  # Docker Compose: server + telegram-bot
+├── compose.yaml                  # Docker Compose: server + telegram-bot + slack-bot
 ├── build.sh                      # Build script
 ├── server/
 │   ├── api.py                   # FastAPI server implementation
 │   ├── telegram_bot.py          # Telegram bot implementation
 │   ├── slack_bot.py             # Slack bot implementation
 │   ├── bot_common.py            # Shared bot logic (sessions, Claude SDK)
+│   ├── sdk_executor.py          # Unified SDK executor with observability
+│   ├── agent_executor.py        # Legacy agent executor
 │   ├── requirements.txt         # Python dependencies (server + bots)
 │   ├── test_telegram_bot.py     # Telegram bot test script
-│   ├── test_slack_bot.py        # Slack bot test script
-│   ├── TELEGRAM_TESTING.md      # Telegram bot testing guide
-│   ├── SLACK_SETUP.md           # Slack bot setup guide
-│   └── README.md                # Quick reference
+│   └── test_slack_bot.py        # Slack bot test script
 ├── examples/client/             # Example client code
 │   ├── test_server.py           # Python test client
 │   └── test_server.sh           # Bash test client
 └── docs/                        # Documentation
     ├── AUTHENTICATION.md        # Auth setup details
-    ├── SERVER.md                # API documentation
-    ├── DEPLOYMENT.md            # Production deployment guide
-    └── TELEGRAM_DOCKER.md       # Telegram bot Docker guide
+    ├── SERVER.md                # FastAPI API reference
+    ├── TELEGRAM.md              # Telegram bot complete guide
+    ├── SLACK.md                 # Slack bot complete guide
+    └── DEPLOYMENT.md            # Production deployment guide
 ```
 
 ## Authentication
@@ -199,8 +199,7 @@ docker compose up -d telegram-bot
 
 ### Documentation
 
-- [server/TELEGRAM_TESTING.md](server/TELEGRAM_TESTING.md) - Complete testing guide
-- [docs/TELEGRAM_DOCKER.md](docs/TELEGRAM_DOCKER.md) - Docker deployment guide
+- [docs/TELEGRAM.md](docs/TELEGRAM.md) - Complete setup, usage, and deployment guide
 
 ### Example Usage
 
@@ -217,7 +216,12 @@ Bot: [Claude executes Bash tool and shows results] 🔧 BASH
 
 You: Read the first file
 Bot: [Claude reads and shows file contents] 🔧 READ
+
+You: \/help
+Bot: [Shows Claude Code help - the backslash escapes the slash]
 ```
+
+**Note:** To use Claude Code's built-in commands (like `/help`, `/clear`, `/prime`), escape the slash with a backslash: `\/help`
 
 ## Using the Slack Bot
 
@@ -250,8 +254,7 @@ docker compose up -d slack-bot
 
 ### Documentation
 
-- [server/SLACK_SETUP.md](server/SLACK_SETUP.md) - Complete setup guide (detailed)
-- [docs/SLACK_BOT_GUIDE.md](docs/SLACK_BOT_GUIDE.md) - Implementation comparison
+- [docs/SLACK.md](docs/SLACK.md) - Complete setup, usage, and deployment guide
 
 ### Example Usage
 
@@ -268,7 +271,12 @@ Bot: [Claude executes Bash tool and shows results] 🔧 BASH
 
 You: Read the first file
 Bot: [Claude reads and shows file contents] 🔧 READ
+
+You: \/help
+Bot: [Shows Claude Code help - the backslash escapes the slash]
 ```
+
+**Note:** To use Claude Code's built-in commands (like `/help`, `/clear`, `/prime`), escape the slash with a backslash: `\/help`
 
 ## Building Your Own Server
 
@@ -304,7 +312,7 @@ docker compose up -d
 docker compose exec server bash
 
 # Try the SDKs
-python -c "from claude_code_sdk import query; print('Python SDK ready')"
+python -c "from claude_agent_sdk import query; print('Python SDK ready')"
 node -e "console.log('TypeScript SDK ready')"
 ```
 
@@ -376,8 +384,8 @@ The guide covers:
 
 ## Resources
 
-- [Claude Code SDK Python Docs](https://docs.claude.com/en/docs/claude-code/sdk/sdk-python)
-- [Claude Code SDK TypeScript Docs](https://docs.claude.com/en/docs/claude-code/sdk/sdk-typescript)
+- [Claude Code SDK Python Docs](https://platform.claude.com/docs/en/agent-sdk/python)
+- [Claude Code SDK TypeScript Docs](https://platform.claude.com/docs/en/agent-sdk/typescript)
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
 

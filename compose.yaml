@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     # Tag the built image locally (includes both TypeScript and Python)
-    image: ${IMAGE_NAME:-claude-code-sdk:latest}
+    image: ${IMAGE_NAME:-claude-agent-sdk:latest}
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
     environment:
@@ -40,7 +40,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${IMAGE_NAME:-claude-code-sdk:latest}
+    image: ${IMAGE_NAME:-claude-agent-sdk:latest}
     environment:
       # Claude Code OAuth Token (required)
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
@@ -59,7 +59,7 @@ services:
       - telegram-sessions:/app/telegram_sessions
     working_dir: /app
     user: root
-    command: bash -c "pip install -r /app/server/requirements.txt && exec su claude -c 'python /app/server/telegram_bot.py'"
+    command: bash -c "pip install -r /app/server/requirements.txt && mkdir -p /app/telegram_sessions && chown -R claude:claude /app/telegram_sessions && exec su claude -c 'python /app/server/telegram_bot.py'"
     restart: unless-stopped
     depends_on:
       - server
@@ -70,7 +70,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${IMAGE_NAME:-claude-code-sdk:latest}
+    image: ${IMAGE_NAME:-claude-agent-sdk:latest}
     environment:
       # Claude Code OAuth Token (required)
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
@@ -91,7 +91,7 @@ services:
       - slack-sessions:/app/slack_sessions
     working_dir: /app
     user: root
-    command: bash -c "pip install -r /app/server/requirements.txt && exec su claude -c 'python /app/server/slack_bot.py'"
+    command: bash -c "pip install -r /app/server/requirements.txt && mkdir -p /app/slack_sessions && chown -R claude:claude /app/slack_sessions && exec su claude -c 'python /app/server/slack_bot.py'"
     restart: unless-stopped
     depends_on:
       - server
