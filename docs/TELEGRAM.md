@@ -37,13 +37,14 @@ TELEGRAM_WORKSPACE=./workspace
 
 **Locally:**
 ```bash
-pip install -r server/requirements.txt
-python server/telegram_bot.py
+pip install -r bot/requirements.txt
+pip install -r server/requirements.txt  # For shared dependencies
+python -m bot.telegram_bot
 ```
 
 **Docker:**
 ```bash
-docker compose up -d telegram-bot
+docker compose -f compose.yaml -f compose-bots.yaml up -d telegram-bot
 docker compose logs telegram-bot -f
 ```
 
@@ -512,7 +513,7 @@ docker compose exec telegram-bot du -sh /app/telegram_sessions/
 Run multiple bot instances:
 
 ```yaml
-# compose.yaml
+# compose-bots.yaml
 services:
   telegram-bot-1:
     # ... same config ...
@@ -533,7 +534,7 @@ services:
 
 ### Resource Limits
 
-Add to `compose.yaml`:
+Add to `compose-bots.yaml`:
 
 ```yaml
 telegram-bot:
@@ -550,7 +551,7 @@ telegram-bot:
 
 ### User Access Control
 
-Implement user whitelist in `telegram_bot.py`:
+Implement user whitelist in `bot/telegram_bot.py`:
 
 ```python
 # Add at the top

@@ -1,0 +1,12 @@
+# Python dependencies for Claude Agent SDK Bots
+
+# Telegram bot dependencies
+python-telegram-bot>=21.0,<22.0
+python-dotenv>=1.0.0
+
+# Slack bot dependencies
+slack-bolt>=1.18.0
+
+# Claude Code SDK
+claude-agent-sdk>=0.1.0
+

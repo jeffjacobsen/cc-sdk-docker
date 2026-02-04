@@ -1,0 +1,66 @@
+# Bot Services (Telegram and Slack)
+# This compose file adds bot services to the base API server
+# Usage: docker compose -f compose.yaml -f compose-bots.yaml up -d
+
+services:
+  # Telegram bot container
+  telegram-bot:
+    container_name: claude-telegram-bot
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${IMAGE_NAME:-claude-agent-sdk:latest}
+    environment:
+      # Claude Code OAuth Token (required)
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      # Telegram Bot API Key (required)
+      - TELEGRAM_BOT_API_KEY=${TELEGRAM_BOT_API_KEY:-}
+      # Working directory for file operations (optional)
+      - WORKING_DIRECTORY=${TELEGRAM_WORKING_DIRECTORY:-/workspace}
+    volumes:
+      # Mount current directory for development
+      - .:/app
+      # Mount workspace for file operations
+      - ${TELEGRAM_WORKSPACE:-./workspace}:/workspace
+      # Persistent session storage
+      - telegram-sessions:/app/telegram_sessions
+    working_dir: /app
+    user: root
+    command: bash -c "pip install -r /app/bot/requirements.txt && pip install -r /app/server/requirements.txt && mkdir -p /app/telegram_sessions && chown -R claude:claude /app/telegram_sessions && exec su claude -c 'python -m bot.telegram_bot'"
+    restart: unless-stopped
+    depends_on:
+      - server
+
+  # Slack bot container
+  slack-bot:
+    container_name: claude-slack-bot
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${IMAGE_NAME:-claude-agent-sdk:latest}
+    environment:
+      # Claude Code OAuth Token (required)
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      # Slack Bot Token (required)
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}
+      # Slack App Token for Socket Mode (required)
+      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN:-}
+      # Working directory for file operations (optional)
+      - WORKING_DIRECTORY=${SLACK_WORKING_DIRECTORY:-/workspace}
+    volumes:
+      # Mount current directory for development
+      - .:/app
+      # Mount workspace for file operations
+      - ${SLACK_WORKSPACE:-./workspace}:/workspace
+      # Persistent session storage
+      - slack-sessions:/app/slack_sessions
+    working_dir: /app
+    user: root
+    command: bash -c "pip install -r /app/bot/requirements.txt && pip install -r /app/server/requirements.txt && mkdir -p /app/slack_sessions && chown -R claude:claude /app/slack_sessions && exec su claude -c 'python -m bot.slack_bot'"
+    restart: unless-stopped
+    depends_on:
+      - server
+
+volumes:
+  telegram-sessions:
+  slack-sessions:

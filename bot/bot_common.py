@@ -22,7 +22,7 @@ from typing import Optional, Tuple, List, TYPE_CHECKING
 # Lazy import to avoid circular dependencies
 # Only imported when process_claude_message is called
 if TYPE_CHECKING:
-    from sdk_executor import (
+    from server.sdk_executor import (
         ClaudeExecutor,
         ExecutorConfig,
         ResponseMode,
@@ -288,7 +288,7 @@ async def process_claude_message(
         - new_session_id: New session ID for persistence
     """
     # Lazy import to avoid circular dependencies
-    from sdk_executor import (
+    from server.sdk_executor import (
         ExecutorConfig,
         ResponseMode,
         ThinkingMode,

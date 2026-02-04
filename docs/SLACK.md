@@ -35,13 +35,14 @@ CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-your-token
 
 **Locally:**
 ```bash
-pip install -r server/requirements.txt
-python server/slack_bot.py
+pip install -r bot/requirements.txt
+pip install -r server/requirements.txt  # For shared dependencies
+python -m bot.slack_bot
 ```
 
 **Docker:**
 ```bash
-docker compose up -d slack-bot
+docker compose -f compose.yaml -f compose-bots.yaml up -d slack-bot
 docker compose logs slack-bot -f
 ```
 
@@ -145,7 +146,8 @@ FILE_LOGGING=true
 ### Step 3: Install Dependencies
 
 ```bash
-pip install -r server/requirements.txt
+pip install -r bot/requirements.txt
+pip install -r server/requirements.txt  # For shared dependencies
 ```
 
 This installs:
@@ -275,7 +277,7 @@ When Claude uses tools, you'll see indicators:
 Run the test suite:
 
 ```bash
-python server/test_slack_bot.py
+python bot/test_slack_bot.py
 ```
 
 Checks:
@@ -294,19 +296,25 @@ Checks:
 95% of code is shared between Telegram and Slack bots via `bot_common.py`:
 
 ```
-server/
+bot/
 ├── bot_common.py          # Shared logic (sessions, Claude SDK, utilities)
 ├── telegram_bot.py        # Telegram-specific handlers
 └── slack_bot.py           # Slack-specific handlers
 ```
 
+The bots import shared functionality from `server/` for SDK execution and observability.
+
 ### Docker Services
 
-Three independent services in `compose.yaml`:
+Services are split between `compose.yaml` (API server) and `compose-bots.yaml` (bots):
 
 ```yaml
+# compose.yaml
 services:
   server:        # FastAPI REST API (port 3000)
+
+# compose-bots.yaml
+services:
   telegram-bot:  # Telegram bot (polling)
   slack-bot:     # Slack bot (Socket Mode)
 ```
@@ -314,10 +322,10 @@ services:
 Run individually or together:
 
 ```bash
-docker compose up -d server        # API only
-docker compose up -d telegram-bot  # Telegram only
-docker compose up -d slack-bot     # Slack only
-docker compose up -d               # All services
+docker compose up -d                                   # API only
+docker compose -f compose.yaml -f compose-bots.yaml up -d telegram-bot  # With Telegram
+docker compose -f compose.yaml -f compose-bots.yaml up -d slack-bot     # With Slack
+docker compose -f compose.yaml -f compose-bots.yaml up -d               # All services
 ```
 
 ### Session Storage
@@ -434,7 +442,7 @@ docker compose config | grep slack_sessions
 Limit bot access to specific users:
 
 ```python
-# In slack_bot.py, add at the top:
+# In bot/slack_bot.py, add at the top:
 ALLOWED_USER_IDS = [
     "U12345ABC",  # Your Slack user ID
     "U67890DEF",  # Another user's ID
@@ -458,7 +466,7 @@ To find user IDs:
 
 ### Resource Limits
 
-Add to `compose.yaml`:
+Add to `compose-bots.yaml`:
 
 ```yaml
 slack-bot:

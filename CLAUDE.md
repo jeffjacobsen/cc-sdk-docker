@@ -14,9 +14,11 @@ This is a **simple example project** that demonstrates how to:
 
 The Claude Code SDK normally uses interactive browser-based OAuth authentication, which doesn't work in containerized environments. This project solves that by:
 
-- Using **long-lived OAuth tokens** (`sk-ant-oat01-*`) generated on the host machine
-- Passing tokens to containers via environment variables (`CLAUDE_CODE_OAUTH_TOKEN`)
-- Configuring the SDK to use these tokens automatically on container startup
+- Using **environment variables** for authentication:
+  - `ANTHROPIC_API_KEY` - API key from https://console.anthropic.com (recommended for production)
+  - `CLAUDE_CODE_OAUTH_TOKEN` - Long-lived OAuth token (`sk-ant-oat01-*`) for Claude.ai access
+- The SDK automatically reads these environment variables - no entrypoint scripts needed
+- Simple, direct authentication suitable for containerized deployments
 
 ## Architecture
 
@@ -28,7 +30,7 @@ The Claude Code SDK normally uses interactive browser-based OAuth authentication
 - **Stage 3**: Runtime image with both SDKs + server code
 - **Non-root user**: Runs as `claude` user for security
 
-### Example Server & Bots
+### API Server
 - **FastAPI** HTTP server ([server/api.py](server/api.py))
   - REST endpoints for interacting with Claude Code SDK
   - One-off queries (stateless)
@@ -36,53 +38,71 @@ The Claude Code SDK normally uses interactive browser-based OAuth authentication
   - Streaming responses via Server-Sent Events
   - Tool permission controls
 
-- **Telegram bot** ([server/telegram_bot.py](server/telegram_bot.py))
-  - Direct message chat interface
-  - Per-user sessions and working directories
-  - Bot commands (`/start`, `/help`, `/setcwd`, `/reset`, etc.)
-
-- **Slack bot** ([server/slack_bot.py](server/slack_bot.py))
-  - Direct message and channel support
-  - Per-user sessions and working directories
-  - Slash commands and threaded replies
-
-- **Shared bot logic** ([server/bot_common.py](server/bot_common.py))
-  - 95% code reuse between Telegram and Slack bots
-  - Unified session management
-  - Common Claude SDK integration
-
 - **Unified SDK executor** ([server/sdk_executor.py](server/sdk_executor.py))
   - Single entry point for all Claude SDK calls
   - Integrated observability (Sentry, PostHog, file logging)
   - Flexible response modes and thinking block controls
 
+### Bots (Optional)
+- **Telegram bot** ([bot/telegram_bot.py](bot/telegram_bot.py))
+  - Direct message chat interface
+  - Per-user sessions and working directories
+  - Bot commands (`/start`, `/help`, `/setcwd`, `/reset`, etc.)
+
+- **Slack bot** ([bot/slack_bot.py](bot/slack_bot.py))
+  - Direct message and channel support
+  - Per-user sessions and working directories
+  - Slash commands and threaded replies
+
+- **Shared bot logic** ([bot/bot_common.py](bot/bot_common.py))
+  - 95% code reuse between Telegram and Slack bots
+  - Unified session management
+  - Common Claude SDK integration
+
 ### Docker Compose Setup
-- **Three services** defined in [compose.yaml](compose.yaml):
+- **Base service** defined in [compose.yaml](compose.yaml):
   - `server` - FastAPI REST API (port 3000)
+- **Optional bot services** defined in [compose-bots.yaml](compose-bots.yaml):
   - `telegram-bot` - Telegram bot (polling)
   - `slack-bot` - Slack bot (Socket Mode)
-- **Environment variables** for authentication
+- **Environment variables** for authentication (set in `.env` file):
+  - `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` for Claude SDK access
+  - Bot-specific tokens as needed
 - **Volume mounts** for development (bind mount current directory)
 - **Health checks** to verify server is running
 - **Port mapping** (default 3000, configurable via `PORT` env var)
+- **No entrypoint scripts** - SDK reads environment variables directly
+
+To run just the API server:
+```bash
+docker compose up -d
+```
+
+To run with bots:
+```bash
+docker compose -f compose.yaml -f compose-bots.yaml up -d
+```
 
 ## Repository Structure
 
 ```
 .
 ├── Dockerfile              # Single unified image (TypeScript + Python)
-├── compose.yaml            # Three services: server, telegram-bot, slack-bot
+├── compose.yaml            # Base service: API server
+├── compose-bots.yaml       # Optional bot services
 ├── build.sh                # Build helper script
-├── server/
+├── server/                 # API Server
 │   ├── api.py             # FastAPI server implementation
+│   ├── sdk_executor.py    # Unified SDK executor with observability
+│   ├── observability.py   # Observability hub (Sentry, PostHog, logging)
+│   └── requirements.txt   # Python dependencies (server only)
+├── bot/                    # Bots (optional)
 │   ├── telegram_bot.py    # Telegram bot implementation
 │   ├── slack_bot.py       # Slack bot implementation
 │   ├── bot_common.py      # Shared bot logic (95% code reuse)
-│   ├── sdk_executor.py    # Unified SDK executor with observability
-│   ├── agent_executor.py  # Legacy agent executor
-│   ├── requirements.txt   # Python dependencies (server + bots)
 │   ├── test_telegram_bot.py  # Telegram bot test script
-│   └── test_slack_bot.py     # Slack bot test script
+│   ├── test_slack_bot.py     # Slack bot test script
+│   └── requirements.txt   # Python dependencies (bots only)
 ├── examples/client/       # Test clients
 │   ├── test_server.py     # Python client
 │   ├── test_server.sh     # Bash client
@@ -94,35 +114,33 @@ The Claude Code SDK normally uses interactive browser-based OAuth authentication
 │   ├── SLACK.md           # Slack bot complete guide
 │   └── DEPLOYMENT.md      # Production deployment guide
 └── scripts/
-    └── docker-entrypoint.sh  # Container startup script
+    └── (helper scripts)
 ```
 
 ## Key Files
 
 ### [Dockerfile](Dockerfile)
 - Multi-stage build for optimal size
-- Installs both Claude Code SDKs
-- Sets up non-root user
-- Copies example code and scripts
+- Installs both Claude Code SDKs (Python and TypeScript)
+- Sets up non-root user for security
+- No entrypoint scripts - clean and simple
 
 ### [compose.yaml](compose.yaml)
-- Defines three services: `server`, `telegram-bot`, `slack-bot`
+- Defines base service: `server` (API server)
 - Mounts current directory for development
-- Sets environment variables for authentication
+- Passes authentication via environment variables
 - Configures health checks and volume mounts
+
+### [compose-bots.yaml](compose-bots.yaml)
+- Optional bot services: `telegram-bot`, `slack-bot`
+- Extends base compose file
+- Separate requirements and configurations
 
 ### [server/api.py](server/api.py)
 - FastAPI application
 - Implements REST endpoints for Claude interactions
 - Manages conversation sessions in memory
 - Handles streaming responses
-
-### [server/bot_common.py](server/bot_common.py)
-- Shared session management (save/load/clear per user)
-- Working directory configuration
-- Claude SDK integration via unified executor
-- Message utilities (splitting, formatting, tool indicators)
-- 95% code reuse between Telegram and Slack bots
 
 ### [server/sdk_executor.py](server/sdk_executor.py)
 - Unified entry point for all Claude SDK calls
@@ -131,22 +149,25 @@ The Claude Code SDK normally uses interactive browser-based OAuth authentication
 - Thinking block control: include, exclude, log only
 - Automatic tool tracking and metrics
 
-### [scripts/docker-entrypoint.sh](scripts/docker-entrypoint.sh)
-- Container startup script
-- Configures authentication if `CLAUDE_CODE_OAUTH_TOKEN` is set
-- Creates necessary credential files
+### [bot/bot_common.py](bot/bot_common.py)
+- Shared session management (save/load/clear per user)
+- Working directory configuration
+- Claude SDK integration via unified executor
+- Message utilities (splitting, formatting, tool indicators)
+- 95% code reuse between Telegram and Slack bots
 
 ## Development Guidelines
 
 When modifying this repository:
 
 1. **Keep it simple** - This is meant to be an example/starting point, not a production framework
-2. **Authentication via environment variables** - Don't change this; it's the core solution
+2. **Authentication via environment variables** - The SDK reads `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` directly from the environment
 3. **Maintain both SDKs** - The image supports both Python (claude-agent-sdk) and TypeScript
-4. **Use unified SDK executor** - All bots now use [server/sdk_executor.py](server/sdk_executor.py) for consistent observability
-5. **Share code between bots** - Telegram and Slack bots share 95% of code via [server/bot_common.py](server/bot_common.py)
-6. **Test with the example clients** - Use test scripts to verify changes
-7. **Update documentation** - Keep [README.md](README.md) and docs in sync with code changes
+4. **Separate concerns** - API server code in `server/`, bot code in `bot/`
+5. **Use unified SDK executor** - All components use [server/sdk_executor.py](server/sdk_executor.py) for consistent observability
+6. **Share code between bots** - Telegram and Slack bots share 95% of code via [bot/bot_common.py](bot/bot_common.py)
+7. **Test with the example clients** - Use test scripts to verify changes
+8. **Update documentation** - Keep [README.md](README.md) and docs in sync with code changes
 
 ## Common Tasks
 
@@ -157,9 +178,15 @@ When modifying this repository:
 4. Update [docs/SERVER.md](docs/SERVER.md)
 
 ### Adding Python dependencies
+For server dependencies:
 1. Add to [server/requirements.txt](server/requirements.txt)
 2. Rebuild: `./build.sh --no-cache`
 3. Restart: `docker compose up -d`
+
+For bot dependencies:
+1. Add to [bot/requirements.txt](bot/requirements.txt)
+2. Rebuild: `./build.sh --no-cache`
+3. Restart: `docker compose -f compose.yaml -f compose-bots.yaml up -d`
 
 ### Adding Node.js dependencies
 1. Edit [Dockerfile](Dockerfile) to add `npm install` command

@@ -1,8 +1,5 @@
 # Multi-language Claude Code SDK container
 # Supports both TypeScript/JavaScript and Python
-# Build Date: July 2025
-# Claude Code CLI: Latest version (unpinned) - ~v1.0.64 as of July 2025
-# Python SDK: Latest version (unpinned) - ~v0.0.17 as of July 2025
 
 # Stage 1: Build Node.js dependencies
 FROM node:22-slim AS node-builder
@@ -86,7 +83,7 @@ RUN ln -s /usr/bin/python3 /usr/bin/python || true
 # Create non-root user
 RUN useradd -m -s /bin/bash claude
 
-# Create directory for Claude auth and configuration
+# Create directory for Claude configuration
 RUN mkdir -p /home/claude/.claude && \
     chmod 755 /home/claude/.claude && \
     chown -R claude:claude /home/claude/.claude
@@ -98,13 +95,8 @@ RUN mkdir -p /home/claude/.claude/commands /home/claude/.claude/hooks && \
 # Copy Claude configuration scaffolding
 COPY --chown=claude:claude .claude/ /home/claude/.claude/
 
-# Copy examples and scripts
+# Copy examples
 COPY --chown=claude:claude examples/ /app/examples/
-COPY --chown=claude:claude scripts/ /app/scripts/
-
-# Copy entrypoint script (as root)
-COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Set working directory
 WORKDIR /app
@@ -118,8 +110,6 @@ ARG PORT=3000
 ENV PORT=${PORT}
 EXPOSE ${PORT}
 
-# Set entrypoint
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-
-# Default command
+# Default command - sleep infinity allows container to stay running
+# Applications should be started via docker compose command override
 CMD ["sleep", "infinity"]
